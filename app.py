@@ -7,6 +7,20 @@ from flask import (
     Flask, render_template, request, redirect, url_for,
     session, flash, abort, jsonify
 )
+# ... existing imports ...
+
+# --- AI helpers ---
+
+import tempfile, os
+from ai_utils import get_image_vec, get_text_vec, cosine_sim
+# Tune this if you like: higher = stricter, lower = looser
+AI_MATCH_THRESHOLD = 0.23
+# If cosine similarity ≥ this, treat the photo as a duplicate
+DUPLICATE_THRESHOLD = 0.90
+
+
+
+
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -25,6 +39,19 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 csrf = CSRFProtect(app)
 db = SQLAlchemy(app)
+# words that mark a report as urgent
+URGENT_KEYWORDS = [
+    "passport", "visa", "epipen", "epi-pen", "insulin", "inhaler",
+    "medical", "prescription", "hearing aid", "oxygen", "oxygen tank",
+]
+def compute_priority(description: str) -> float:
+    """Return 1.0 if any urgent keyword appears, else 0.0."""
+    desc_lc = description.lower()
+    for w in URGENT_KEYWORDS:
+        if w in desc_lc:
+            return 1.0
+    return 0.0
+
 
 from difflib import SequenceMatcher
 
@@ -51,6 +78,10 @@ class Report(db.Model):
     claimed     = db.Column(db.Boolean, default=False)
     claimed_by  = db.Column(db.String, nullable=True)
     received    = db.Column(db.Boolean, default=False)
+    img_emb = db.Column(db.PickleType)  # stores the image vector
+    priority_score = db.Column(db.Float, default=0.0)
+
+
 
 class ClaimRequest(db.Model):
     id          = db.Column(db.Integer, primary_key=True)
@@ -63,7 +94,7 @@ class ClaimRequest(db.Model):
     location1   = db.Column(db.String)
     location2   = db.Column(db.String)
     location3   = db.Column(db.String)
-    report      = db.relationship('Report', backref=db.backref('claim_requests', lazy=True))
+    
 
 
 class Complaint(db.Model):
@@ -190,6 +221,30 @@ def report_found():
         f = form.photo.data
         filename = secure_filename(f.filename)
         f.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                # --- NEW: compute image embedding ---
+        img_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        try:
+            img_vec = get_image_vec(img_path)
+        except Exception as e:
+            img_vec = None  # fallback if something goes wrong
+                # --- DUPLICATE CHECK ---------------------------------
+        if img_vec is not None:
+            existing = Report.query.with_entities(Report.id, Report.img_emb).filter(
+                Report.img_emb.isnot(None)
+            ).all()
+
+            for rep_id, emb in existing:
+                try:
+                    sim = cosine_sim(img_vec, emb)
+                except Exception:
+                    continue
+                print(f"Duplicate-check: against #{rep_id}  sim={sim:.3f}")
+                if sim >= DUPLICATE_THRESHOLD:
+                    flash(f"This photo looks {int(sim*100)}% similar to an item already reported (ID #{rep_id}).", "warning")
+                    return redirect(url_for('report_found'))
+        # --- END DUPLICATE CHECK ------------------------------
+
+
 
         desc = bleach.clean(form.description.data)
         rpt = Report(
@@ -200,7 +255,10 @@ def report_found():
             date_found  = form.date_found.data.strftime('%Y-%m-%d'),
             category    = form.category.data,
             contact     = form.contact.data,
-            received    = False
+            received    = False,
+            img_emb     = img_vec,
+            priority_score = compute_priority(desc),
+
         )
         db.session.add(rpt)
         db.session.commit()
@@ -378,6 +436,40 @@ with app.app_context():
             roles=''
         ))
     db.session.commit()
+
+@csrf.exempt
+@app.route("/api/check_match", methods=["POST"])
+def api_check_match():
+    """
+    AJAX helper:
+    • expects multipart/form-data with keys: image=<file>, text=<str>
+    • returns JSON: {"ok": bool, "score": float}
+    """
+    file = request.files.get("image")
+    descr = request.form.get("text", "")
+
+    # basic guard clauses
+    if not file or not descr:
+        return jsonify({"ok": False, "error": "missing image or text"}), 400
+
+    # Save image to a temp file so PIL can open it
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+    file.save(tmp.name)
+    tmp.close()
+
+    # compute similarity
+    try:
+        score = cosine_sim(
+            get_image_vec(tmp.name),
+            get_text_vec(descr)
+        )
+    finally:
+        # always remove the temp file
+        os.unlink(tmp.name)
+
+    ok = score >= AI_MATCH_THRESHOLD
+    return jsonify({"ok": ok, "score": round(score, 3)})
+
 
 if __name__ == '__main__':
     app.run(debug=True)

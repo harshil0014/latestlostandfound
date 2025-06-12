@@ -13,6 +13,12 @@
       margin: 0;
       padding: 20px;
     }
+    button[disabled] {
+      background: #95a5a6;   /* grey */
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
 
     .form-container {
       max-width: 500px;
@@ -117,11 +123,30 @@
 <body>
   <div class="form-container">
     <h2>Report Found Item</h2>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, msg in messages %}
+          <div style="
+              padding:10px; margin-bottom:12px; border-radius:6px;
+              background-color:{% if category == 'warning' %}#f9e79f{% else %}#d4efdf{% endif %};
+              border:1px solid #ccc;">
+            {{ msg }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
     <form method="post" enctype="multipart/form-data">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
       <label>{{ form.description.label }}</label>
-      {{ form.description(size=50) }}
+      {{ form.description(size=50, id="desc") }}
+      <p id="ai-warning"
+        style="color:#e74c3c; display:none; font-weight:bold;">
+        ⚠️ The photo doesn’t seem to match your description. Please check!
+      </p>
+
+
 
       <!-- New wrapper div for location dropdown and conditional dropdown -->
       <div class="location-selector-group">
@@ -185,7 +210,8 @@
       {{ form.contact(size=20) }}
 
       <label>{{ form.photo.label }}</label>
-      {{ form.photo() }}
+      {{ form.photo(id="photo") }}
+
 
       {% for error in form.contact.errors %}
         <small style="color:red">Contact must be exactly 10 digits.</small>
@@ -299,5 +325,51 @@
       });
     }
   </script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      // Grab things we need
+      const desc  = document.getElementById("desc");
+      const photo = document.getElementById("photo");
+      const warn  = document.getElementById("ai-warning");
+      const btn   = document.querySelector("button[type=submit]");
+
+      // Talk to /api/check_match
+      async function checkMatch() {
+        // Need both a file and some text; otherwise do nothing
+        if (!photo.files[0] || !desc.value.trim()) {
+          warn.style.display = "none";
+          btn.disabled = false;
+          return;
+        }
+
+        const fd = new FormData();
+        fd.append("image", photo.files[0]);
+        fd.append("text",  desc.value.trim());
+
+        try {
+          const r  = await fetch("/api/check_match", { method: "POST", body: fd });
+          const js = await r.json();
+          console.log("AI score:", js.score);
+
+          if (js.ok) {
+            warn.style.display = "none";
+            btn.disabled = false;
+          } else {
+            warn.style.display = "block";
+            btn.disabled = true;
+          }
+        } catch (e) {
+          // If the AI route fails, fail open (allow submit)
+          warn.style.display = "none";
+          btn.disabled = false;
+        }
+      }
+
+      // Re-check when user edits description or picks a photo
+      desc.addEventListener("input",  () => setTimeout(checkMatch, 400));
+      photo.addEventListener("change", checkMatch);
+    });
+  </script>
+
 </body>
 </html>
