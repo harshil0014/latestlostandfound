@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Manage Announcements</title>
+  <style>
+    body{font-family:sans-serif;padding:20px;}
+    textarea{width:100%;height:80px;}
+    ul{list-style:none;padding-left:0;}
+    li{margin:8px 0;border-bottom:1px solid #ccc;padding-bottom:8px;}
+  </style>
+</head>
+<body>
+  <h1>Manage Announcements</h1>
+  <form method="POST">
+    {{ form.csrf_token }}
+    <label for="msg">Message:</label><br>
+    {{ form.message(rows=4) }}<br><br>
+    <button type="submit">Post Announcement</button>
+  </form>
+
+  <h2>Existing</h2>
+  <ul>
+    {% for a in announcements %}
+      <li>{{ a.message }} <em>({{ a.timestamp.strftime('%Y-%m-%d') }})</em></li>
+    {% else %}
+      <li>No announcements.</li>
+    {% endfor %}
+  </ul>
+
+  <p><a href="{{ url_for('show_home') }}">&larr; Back to Home</a></p>
+</body>
+</html>
+<!-- Change for claim_feature branch test -->

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>My Claims</title>
+  <style>
+    body{font-family:sans-serif;padding:20px;}
+    table{width:100%;border-collapse:collapse;}
+    th,td{padding:8px;border:1px solid #ccc;}
+  </style>
+</head>
+<body>
+  <h1>My Claim Requests</h1>
+  <table>
+    <tr><th>Item #</th><th>Status</th><th>On</th></tr>
+    {% for c in my_requests %}
+      <tr>
+        <td>{{ c.report_id }}</td>
+        <td>{{ c.status.title() }}</td>
+        <td>{{ c.timestamp.strftime('%Y-%m-%d') }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+  <p><a href="{{ url_for('show_home') }}">&larr; Back</a></p>
+</body>
+</html>

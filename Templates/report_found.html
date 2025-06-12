@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Report Found Item</title>
+  <link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #ecf0f1;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .form-container {
+      max-width: 500px;
+      margin: 40px auto;
+      background: #fff;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      position: relative; /* Keep this for overall form positioning */
+      display: flex; /* Use flexbox to manage internal layout easily */
+      flex-direction: column; /* Stack items vertically */
+    }
+
+    .form-container h2 {
+      margin-top: 0;
+      text-align: center; /* Center the heading */
+      margin-bottom: 20px;
+    }
+
+    .form-container form input,
+    .form-container form select,
+    .form-container form button {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      box-sizing: border-box;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .form-container form button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s ease;
+    }
+
+    .form-container form button:hover {
+      background-color: #2980b9;
+    }
+
+    /* New wrapper for the location dropdown and the conditional dropdown */
+    .location-selector-group {
+      position: relative; /* This is the reference point for the absolute dropdown */
+      display: inline-block; /* Allows it to take only necessary width */
+      width: 100%; /* Make it span the full width within the form */
+      margin-bottom: 20px; /* Add some space below it */
+    }
+
+    .location-selector-group label {
+      display: block; /* Make label take full width */
+      margin-bottom: 5px; /* Space between label and select */
+    }
+
+    /* Styling for conditional dropdown containers (e.g., floor selectors) */
+    .conditional-dropdown-container {
+      position: absolute; /* Positioned relative to .location-selector-group */
+      left: calc(100% + 10px); /* Position 10px to the right of the wrapper */
+      top: 0; /* Align to the top of the wrapper */
+      background: #fff;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      min-width: 180px; /* Ensure enough space for floor options */
+      z-index: 100; /* Ensures it appears above other elements */
+      white-space: nowrap; /* Prevent text wrapping inside */
+    }
+
+    .conditional-dropdown-container label {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .conditional-dropdown-container select {
+      width: 100%; /* Make the select element fill its container */
+      padding: 8px; /* Adjust padding for better look within the smaller box */
+      margin: 0; /* Remove default margin */
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 600px) {
+      .form-container {
+        margin: 20px auto;
+        padding: 15px;
+      }
+      .conditional-dropdown-container {
+        /* On smaller screens, stack it below if there isn't enough horizontal space */
+        position: static; /* Remove absolute positioning */
+        width: 100%; /* Take full width */
+        margin-top: 15px; /* Add space when stacked */
+        left: auto; /* Reset left */
+        top: auto; /* Reset top */
+      }
+      .location-selector-group {
+        display: block; /* Ensure it takes full width */
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="form-container">
+    <h2>Report Found Item</h2>
+    <form method="post" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <label>{{ form.description.label }}</label>
+      {{ form.description(size=50) }}
+
+      <!-- New wrapper div for location dropdown and conditional dropdown -->
+      <div class="location-selector-group">
+        <label for="location">Location Found</label>
+        <select id="location" name="location" class="w-full p-2 mt-1 mb-2 border rounded">
+          <option value="">-- Select Location --</option> <!-- Added a default empty option -->
+          <option value="Aryabhatt">Aryabhatt</option>
+          <option value="Bhaskaracharya">Bhaskaracharya</option>
+          <option value="Engineering Canteen">Engineering Canteen </option>
+          <option value="MBA canteen">MBA canteen</option>
+        </select>
+
+        <!-- Aryabhatt Floors and Rooms Container -->
+        <div id="aryabhatt-details-container" class="conditional-dropdown-container" style="display: none;">
+          <label for="aryabhatt-floor-select">Floor:</label>
+          <select id="aryabhatt-floor-select" name="aryabhatt_floor" class="w-full p-2 mt-1 mb-2 border rounded">
+            <option value="">-- Select Floor --</option>
+            <option value="First Floor">First Floor</option>
+            <option value="Second Floor">Second Floor</option>
+            <option value="Third Floor">Third Floor</option>
+            <option value="Fourth Floor">Fourth Floor</option>
+          </select>
+
+          <!-- Aryabhatt Rooms (initially hidden, shown when a floor is selected) -->
+          <div id="aryabhatt-rooms-container" style="display: none; margin-top: 10px;">
+            <label for="aryabhatt-room-select">Room:</label>
+            <select id="aryabhatt-room-select" name="aryabhatt_room" class="w-full p-2 mt-1 mb-2 border rounded">
+              <option value="">-- Select Room --</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Bhaskaracharya Floors and Rooms Container -->
+        <div id="bhaskaracharya-details-container" class="conditional-dropdown-container" style="display: none;">
+          <label for="bhaskaracharya-floor-select">Floor:</label>
+          <select id="bhaskaracharya-floor-select" name="bhaskaracharya_floor" class="w-full p-2 mt-1 mb-2 border rounded">
+            <option value="">-- Select Floor --</option>
+            <option value="First Floor">First Floor</option>
+            <option value="Second Floor">Second Floor</option>
+            <option value="Third Floor">Third Floor</option>
+            <option value="Fourth Floor">Fourth Floor</option>
+            <option value="Fifth Floor">Fifth Floor</option>
+          </select>
+          <!-- Bhaskaracharya Rooms (initially hidden, shown when a floor is selected) -->
+          <div id="bhaskaracharya-rooms-container" style="display: none; margin-top: 10px;">
+            <label for="bhaskaracharya-room-select">Room:</label>
+            <select id="bhaskaracharya-room-select" name="bhaskaracharya_room" class="w-full p-2 mt-1 mb-2 border rounded">
+              <option value="">-- Select Room --</option>
+            </select>
+          </div>
+        </div>
+      </div> <!-- End of location-selector-group -->
+
+      <label>{{ form.date_found.label }}</label>
+      {{ form.date_found(min=min_date, max=max_date) }}
+
+      <label>{{ form.category.label }}</label>
+      {{ form.category() }}
+
+      <label>{{ form.contact.label }}</label>
+      {{ form.contact(size=20) }}
+
+      <label>{{ form.photo.label }}</label>
+      {{ form.photo() }}
+
+      {% for error in form.contact.errors %}
+        <small style="color:red">Contact must be exactly 10 digits.</small>
+        <br>
+      {% endfor %}
+
+      <button type="submit">Submit Report</button>
+    </form>
+  </div>
+
+  <script>
+    // Get references to the HTML elements we need
+    const locationSelect = document.getElementById('location');
+
+    // Aryabhatt elements
+    const aryabhattDetailsContainer = document.getElementById('aryabhatt-details-container');
+    const aryabhattFloorSelect = document.getElementById('aryabhatt-floor-select');
+    const aryabhattRoomsContainer = document.getElementById('aryabhatt-rooms-container');
+    const aryabhattRoomSelect = document.getElementById('aryabhatt-room-select');
+
+    // Bhaskaracharya elements
+    const bhaskaracharyaDetailsContainer = document.getElementById('bhaskaracharya-details-container');
+    const bhaskaracharyaFloorSelect = document.getElementById('bhaskaracharya-floor-select');
+    const bhaskaracharyaRoomsContainer = document.getElementById('bhaskaracharya-rooms-container');
+    const bhaskaracharyaRoomSelect = document.getElementById('bhaskaracharya-room-select');
+
+    // Map location values to their corresponding detail (floor and room) container elements
+    const locationDetailElements = {
+      'Aryabhatt': {
+        detailsContainer: aryabhattDetailsContainer,
+        floorSelect: aryabhattFloorSelect,
+        roomsContainer: aryabhattRoomsContainer,
+        roomSelect: aryabhattRoomSelect
+      },
+      'Bhaskaracharya': {
+        detailsContainer: bhaskaracharyaDetailsContainer,
+        floorSelect: bhaskaracharyaFloorSelect,
+        roomsContainer: bhaskaracharyaRoomsContainer,
+        roomSelect: bhaskaracharyaRoomSelect
+      }
+      // If you add more locations with specific floor/room dropdowns, add their elements here
+    };
+
+    // Helper function to reset a location's dynamic fields
+    function resetLocationFields(locationData) {
+      if (locationData) {
+        if (locationData.detailsContainer) locationData.detailsContainer.style.display = 'none';
+        if (locationData.floorSelect) locationData.floorSelect.value = ''; // Reset floor selection
+        if (locationData.roomsContainer) locationData.roomsContainer.style.display = 'none';
+        if (locationData.roomSelect) locationData.roomSelect.innerHTML = '<option value="">-- Select Room --</option>'; // Clear rooms
+      }
+    }
+
+    // Add an event listener to the main location dropdown
+    locationSelect.addEventListener('change', function() {
+      const selectedValue = this.value;
+
+      // Hide and reset all dynamic field sections associated with locations
+      for (const key in locationDetailElements) {
+        resetLocationFields(locationDetailElements[key]);
+      }
+
+      // Show the details container for the currently selected location, if it's defined
+      if (locationDetailElements[selectedValue] && locationDetailElements[selectedValue].detailsContainer) {
+        locationDetailElements[selectedValue].detailsContainer.style.display = 'block';
+        // The floor select and room container within this are already reset by resetLocationFields
+      }
+    });
+
+    // Function to populate room options based on selected floor
+    function updateRoomOptions(selectedFloorValue, roomsContainerElement, roomSelectElement) {
+      roomsContainerElement.style.display = 'none'; // Hide by default
+      roomSelectElement.innerHTML = '<option value="">-- Select Room --</option>'; // Clear previous rooms and add default
+
+      if (!selectedFloorValue) {
+        return; // No floor selected, so no rooms to show
+      }
+
+      let roomStartNumber;
+      const numRooms = 20; // As per "100 ... upto 1019", meaning 20 rooms (e.g., 100-119)
+
+      switch (selectedFloorValue) {
+        case 'First Floor': roomStartNumber = 100; break;
+        case 'Second Floor': roomStartNumber = 200; break;
+        case 'Third Floor': roomStartNumber = 300; break;
+        case 'Fourth Floor': roomStartNumber = 400; break;
+        case 'Fifth Floor': roomStartNumber = 500; break; // Applicable for buildings like Bhaskaracharya
+        default: return; // Unknown floor or no floor selected
+      }
+
+      for (let i = 0; i < numRooms; i++) {
+        const roomNumber = roomStartNumber + i;
+        const option = document.createElement('option');
+        option.value = roomNumber;
+        option.textContent = roomNumber;
+        roomSelectElement.appendChild(option);
+      }
+      roomsContainerElement.style.display = 'block'; // Show the room dropdown
+    }
+
+    // Add event listeners to floor select dropdowns
+    if (aryabhattFloorSelect) {
+      aryabhattFloorSelect.addEventListener('change', function() {
+        updateRoomOptions(this.value, aryabhattRoomsContainer, aryabhattRoomSelect);
+      });
+    }
+
+    if (bhaskaracharyaFloorSelect) {
+      bhaskaracharyaFloorSelect.addEventListener('change', function() {
+        updateRoomOptions(this.value, bhaskaracharyaRoomsContainer, bhaskaracharyaRoomSelect);
+      });
+    }
+  </script>
+</body>
+</html>

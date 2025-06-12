@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Found Items</title>
+  <style>
+    body{font-family:sans-serif;padding:20px;}
+    table{width:100%;border-collapse:collapse;}
+    th,td{padding:8px;border:1px solid #ccc;}
+  </style>
+</head>
+<body>
+  <h1>Successfully Claimed Items</h1>
+  <table>
+    <tr><th>Item #</th><th>Claimed By</th><th>Date</th></tr>
+    {% for c in accepted %}
+      <tr>
+        <td>{{ c.report_id }}</td>
+        <td>{{ c.user_email }}</td>
+        <td>{{ c.timestamp.strftime('%Y-%m-%d') }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+  <p><a href="{{ url_for('show_home') }}">← Back to Dashboard</a></p>
+</body>
+</html>
