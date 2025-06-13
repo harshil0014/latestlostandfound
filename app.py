@@ -21,6 +21,8 @@ DUPLICATE_THRESHOLD = 0.90
 
 
 
+
+
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -36,6 +38,10 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+app.config['QR_FOLDER'] = os.path.join('static', 'qr')
+os.makedirs(app.config['QR_FOLDER'], exist_ok=True)
+
 
 csrf = CSRFProtect(app)
 db = SQLAlchemy(app)
@@ -53,10 +59,29 @@ def compute_priority(description: str) -> float:
     return 0.0
 
 
-from difflib import SequenceMatcher
+import qrcode               #  ← make sure this import is near the others
+from uuid import uuid4      # we’ll use this to give each QR a unique name
 
-def similarity_score(text1, text2):
-    return round(SequenceMatcher(None, text1.lower(), text2.lower()).ratio() * 100)
+def generate_qr(data: str) -> str:
+    """Create a PNG QR code containing *data*.
+    Returns the **relative path** (e.g. 'qr/abc123.png') that you can pass to <img src>.
+    """
+    # 1. build the QR image in memory
+    img = qrcode.make(data)
+
+    # 2. choose a unique filename
+    fname = f"{uuid4().hex}.png"
+    rel_path = f"qr/{fname}"           # 'qr/....png'
+    abs_path = os.path.join(app.config['QR_FOLDER'], fname)  # static/qr/....png
+
+    # 3. save
+    img.save(abs_path)
+
+    print(f"QR generated → {rel_path}", flush=True)   # ← add this
+
+    return rel_path
+     # something we can embed as /static/qr/...
+
 
 # ─── Models ─────────────────────────────────────────────────────────────────
 class User(db.Model):
@@ -80,6 +105,7 @@ class Report(db.Model):
     received    = db.Column(db.Boolean, default=False)
     img_emb = db.Column(db.PickleType)  # stores the image vector
     priority_score = db.Column(db.Float, default=0.0)
+    qr_code      = db.Column(db.String, nullable=True)   # holds 'qr/<uuid>.png'
 
 
 
@@ -159,7 +185,11 @@ def admin_only(f):
 @app.route('/allow-reports')
 @admin_only
 def allow_reports():
-    pending_reports=Report.query.filter_by(received=False).order_by(Report.timestamp.desc()).all()
+    pending_reports=Report.query.filter_by(received=False).order_by(
+            Report.priority_score.desc(),
+            Report.timestamp.desc()
+        ).all()
+
     return render_template('allow_reports.html',reports=pending_reports)
 
 
@@ -227,6 +257,18 @@ def report_found():
             img_vec = get_image_vec(img_path)
         except Exception as e:
             img_vec = None  # fallback if something goes wrong
+
+        desc = bleach.clean(form.description.data)
+                # ---- DESCRIPTION-vs-PHOTO GUARD ----
+        if img_vec is not None:
+            text_vec   = get_text_vec(desc)
+            similarity = cosine_sim(img_vec, text_vec)
+            print(f"Mismatch-check sim={similarity:.3f}")
+            if similarity < AI_MATCH_THRESHOLD:
+                flash("The photo doesn’t seem to match the description. Please revise.", "warning")
+                return redirect(url_for('report_found'))
+        # ---- END GUARD ----
+
                 # --- DUPLICATE CHECK ---------------------------------
         if img_vec is not None:
             existing = Report.query.with_entities(Report.id, Report.img_emb).filter(
@@ -246,7 +288,7 @@ def report_found():
 
 
 
-        desc = bleach.clean(form.description.data)
+       
         rpt = Report(
             email       = session['email'],
             filename    = filename,
@@ -349,19 +391,25 @@ def view_requests():
         claim_desc  = cr.description or ''
 
         # Description similarity
-        desc_match = similarity_score(report_desc, claim_desc)
+        desc_match = round(
+            cosine_sim(get_text_vec(report_desc), get_text_vec(claim_desc)) * 100
+        )
+
 
         # Location guesses similarity (take highest)
         loc1 = cr.location1 or ''
         loc2 = cr.location2 or ''
         loc_scores = [
-            similarity_score(report_loc, loc1),
-            similarity_score(report_loc, loc2),
+            round(cosine_sim(get_text_vec(report_loc), get_text_vec(loc1)) * 100),
+            round(cosine_sim(get_text_vec(report_loc), get_text_vec(loc2)) * 100),
         ]
+
         best_location_match = max(loc_scores)
 
         # Final score = average of both
         final_match = round((desc_match + best_location_match) / 2)
+
+        
 
         # Attach for display
         cr.desc_match = desc_match
@@ -385,6 +433,11 @@ def decide_claim(req_id, decision):
         rpt = cr.report
         rpt.claimed    = True
         rpt.claimed_by = cr.user_email
+                # ---- QR GENERATION ---------------------------------
+        qr_rel_path = generate_qr(f"Found item #{rpt.id} claimed by {cr.user_email}")
+        rpt.qr_code = qr_rel_path         # store path on the Report
+        # -----------------------------------------------------
+
         others = ClaimRequest.query.filter(
             ClaimRequest.report_id==cr.report_id,
             ClaimRequest.id!=req_id

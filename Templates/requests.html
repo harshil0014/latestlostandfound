@@ -53,8 +53,14 @@
             <li>
               <span>
                 {{ r.user_email }} – 
-                {{ r.match_percentage }}% match 
-                <small style="color:gray;">(Desc: {{ r.desc_match }}%, Loc: {{ r.loc_match }}%)</small>
+
+                <span style="
+                    color:{% if r.match_percentage >= 80 %}green
+                          {% elif r.match_percentage >= 50 %}orange
+                          {% else %}red{% endif %};">
+                  {{ r.match_percentage }}%
+                </span>
+                
               </span>
               <div>
                 <form method="post"

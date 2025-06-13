@@ -12,12 +12,34 @@
 <body>
   <h1>My Claim Requests</h1>
   <table>
-    <tr><th>Item #</th><th>Status</th><th>On</th></tr>
+    <tr><th>Item #</th><th>Status</th><th>On</th><th>QR</th></tr>
+
     {% for c in my_requests %}
       <tr>
         <td>{{ c.report_id }}</td>
         <td>{{ c.status.title() }}</td>
         <td>{{ c.timestamp.strftime('%Y-%m-%d') }}</td>
+        <td>
+          {% if c.report.qr_code %}
+              <a href="{{ url_for('static', filename=c.report.qr_code) }}"
+                target="_blank" style="text-decoration:none">
+                View QR Code
+                <span style="
+                      background:#ffcc00;
+                      color:#000;
+                      font-size:0.7em;
+                      padding:2px 4px;
+                      margin-left:6px;
+                      border-radius:4px;">
+                  Scan me 📱
+                </span>
+              </a>
+          {% else %}
+              –
+          {% endif %}
+        </td>
+
+
       </tr>
     {% endfor %}
   </table>
