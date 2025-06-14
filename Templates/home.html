@@ -1,85 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>KJSSE Lost & Found</title>
-  <link rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-  <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      background: #ecf0f1;
-      color: #2c3e50;
-    }
-    header {
-      background: #2c3e50;
-      color: white;
-      padding: 16px 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    nav a {
-      margin-right: 12px;
-      color: white;
-      text-decoration: none;
-      font-weight: bold;
-    }
-    .categories {
-      background: white;
-      padding: 12px 24px;
-      text-align: center;
-      font-size: 1.1rem;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .categories a {
-      margin: 0 12px;
-      text-decoration: none;
-      color: #2c3e50;
-      font-weight: 500;
-    }
-    .categories a:hover {
-      text-decoration: underline;
-    }
-    .main {
-      padding: 40px;
-      text-align: center;
-    }
-    .announcements {
-      background: white;
-      padding: 20px;
-      margin: 0 auto 20px;
-      max-width: 600px;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-    }
-    .count {
-      font-size: 48px;
-      font-weight: bold;
-      margin-bottom: 8px;
-    }
-  </style>
-</head>
-<body>
-
-<header>
-  <div><strong>KJSSE Lost & Found</strong></div>
-  <nav>
-    {% if 'admin' in roles %}
-      <a href="{{ url_for('allow_reports') }}">📝 Approve Reports</a>
-    {% endif %}
-    <a href="{{ url_for('report_found') }}">📤 Report Found</a>
-    <a href="{{ url_for('items_found') }}">📦 Found Items</a>
-    <a href="{{ url_for('my_claims') }}">📋 My Claims</a>
-    <a href="{{ url_for('settings') }}">⚙️ Settings</a>
-    {% if 'admin' in roles %}
-      <a href="{{ url_for('view_requests') }}">🕒 Pending Requests</a>
-    {% endif %}
-    <a href="{{ url_for('logout') }}">🔄 Logout</a>
-  </nav>
-</header>
-
+{% extends 'layouts/base.html' %}
+{% block title %}Home{% endblock %}
+{% block content %}
 <div class="categories">
   <a href="{{ url_for('category_items', cat='books') }}">Books</a>
   <a href="{{ url_for('category_items', cat='stationary') }}">Stationary</a>
@@ -98,7 +19,4 @@
     <div>Items Successfully Returned</div>
   </div>
 </div>
-
-</body>
-</html>
-<p>This is a test line in claim_feature branch</p>
+{% endblock %}

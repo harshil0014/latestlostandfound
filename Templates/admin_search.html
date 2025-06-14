@@ -1,0 +1,141 @@
+{% extends 'layouts/base.html' %}
+{% block title %}Admin Search{% endblock %}
+{% block content %}
+   
+    <style>
+      button[disabled] {
+        background: #95a5a6;   /* grey */
+        cursor: not-allowed;
+        opacity: 0.7;
+        transition: background-color 0.2s ease, opacity 0.2s ease;
+        pointer-events: none;
+      }
+
+      button[disabled]:hover {
+        background: #95a5a6;
+      }
+
+      .form-container {
+        max-width: 500px;
+        margin: 40px auto;
+        background: #fff;
+        padding: 24px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        position: relative;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .form-container h2 {
+        margin-top: 0;
+        text-align: center;
+        margin-bottom: 20px;
+      }
+
+      .form-container form input,
+      .form-container form button {
+        width: 100%;
+        padding: 10px;
+        margin: 8px 0;
+        box-sizing: border-box;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+
+      .form-container form button {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background-color 0.3s ease;
+      }
+
+      .form-container form button:hover {
+        background-color: #2980b9;
+      }
+    </style>
+
+    <div class="form-container">
+      <h2>Admin Search</h2>
+      <form id="search-form" enctype="multipart/form-data">
+      <label for="search-text">Search by description:</label><br>
+      <input type="text" id="search-text" name="text" placeholder="Enter description"><br><br>
+      
+      <label for="search-image">Or upload an image:</label><br>
+      <input type="file" id="search-image" name="image"><br><br>
+      
+      <button type="submit" disabled>Search</button>
+      </form>
+
+      <div id="search-results">
+      <!-- Results will appear here -->
+      </div>
+    </div>
+      <!-- We’ll add the form here next -->
+    
+      <script>
+          document
+              .getElementById('search-form')
+              .addEventListener('submit', async (e) => {
+              e.preventDefault();
+
+              const form = e.currentTarget;
+              const resultsDiv = document.getElementById('search-results');
+              resultsDiv.innerHTML = 'Searching…';
+
+              // Build FormData
+              const fd = new FormData();
+              const text = form.elements['text'].value.trim();
+              const image = form.elements['image'].files[0];
+              if (text)  fd.append('text', text);
+              if (image) fd.append('image', image);
+
+              // Call our API
+              const resp = await fetch('/api/search', {
+                  method: 'POST',
+                  body: fd
+              });
+              const data = await resp.json();
+
+              // Show “no matches” if none
+              if (!data.matches || data.matches.length === 0) {
+                  resultsDiv.innerHTML = '<p>No matches found.</p>';
+                  return;
+              }
+
+              // Otherwise build a list of results
+              resultsDiv.innerHTML = data.matches.map(m => `
+                  <div style="margin:12px 0; padding:8px; border:1px solid #ccc;">
+                  <img src="/static/uploads/${m.filename}" 
+                      width="80" style="vertical-align:middle; margin-right:8px;">
+                  <strong>#${m.id}</strong> (score ${m.score.toFixed(2)})<br>
+                  ${m.description}
+                  </div>
+              `).join('');
+              });
+      </script>
+      <script>
+      const form    = document.getElementById('search-form');
+      const textIn  = document.getElementById('search-text');
+      const fileIn  = document.getElementById('search-image');
+      const button  = form.querySelector('button[type="submit"]');
+
+      function toggleBtn() {
+      // enable only if there's text AND a file
+      const hasText = textIn.value.trim().length > 0;
+      const hasFile = fileIn.files.length > 0;
+      button.disabled = !(hasText && hasFile);
+      }
+
+
+      textIn.addEventListener('input', toggleBtn);
+      fileIn.addEventListener('change',  toggleBtn);
+
+      
+      </script>
+      
+
+
+{% endblock %}

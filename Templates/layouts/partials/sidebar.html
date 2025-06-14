@@ -1,0 +1,22 @@
+<!-- Main Sidebar - Collapsible -->
+<nav id="sidebar" class="col-md-2 col-lg-2 d-none d-md-block bgGradDown sidebar min-vh-100 pt-4 position-fixed">
+  <div class="sidebar-sticky vh-100">
+    <!-- Collapse button -->
+    <div class="d-flex justify-content-end mb-3 px-3">
+      <button id="sidebarCollapse" class="btn btn-transparent">
+        <i id="sidebarIcon" class="fas fa-arrow-left text-white"></i>
+      </button>
+    </div>
+
+    <!-- Sidebar links -->
+    <ul class="nav flex-column position-relative customHeight">
+      {% include 'layouts/partials/sidebar_navigators.html' %}
+    </ul>
+    <li>
+    <a href="{{ url_for('admin_search') }}">
+        <i class="fas fa-search"></i> Admin Search
+    </a>
+    </li>
+
+  </div>
+</nav>

@@ -2,6 +2,10 @@ import os
 from dotenv import load_dotenv
 from datetime import date,timedelta
 from functools import wraps
+import numpy as np
+import pickle
+import faiss
+
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
@@ -45,6 +49,9 @@ os.makedirs(app.config['QR_FOLDER'], exist_ok=True)
 
 csrf = CSRFProtect(app)
 db = SQLAlchemy(app)
+from vector_store import VectorStore
+
+
 # words that mark a report as urgent
 URGENT_KEYWORDS = [
     "passport", "visa", "epipen", "epi-pen", "insulin", "inhaler",
@@ -130,6 +137,8 @@ class Complaint(db.Model):
     message        = db.Column(db.String, nullable=True)
     timestamp      = db.Column(db.DateTime, server_default=db.func.now())
     report         = db.relationship('Report', backref=db.backref('complaints', lazy=True))
+
+
 
 # ─── Forms ───────────────────────────────────────────────────────────────────
 class ReportForm(FlaskForm):
@@ -244,6 +253,7 @@ def settings():
     return render_template('settings.html')
 
 @app.route('/report-found', methods=['GET','POST'])
+@csrf.exempt
 @login_required
 def report_found():
     form = ReportForm()
@@ -269,22 +279,17 @@ def report_found():
                 return redirect(url_for('report_found'))
         # ---- END GUARD ----
 
-                # --- DUPLICATE CHECK ---------------------------------
-        if img_vec is not None:
-            existing = Report.query.with_entities(Report.id, Report.img_emb).filter(
-                Report.img_emb.isnot(None)
-            ).all()
-
-            for rep_id, emb in existing:
-                try:
-                    sim = cosine_sim(img_vec, emb)
-                except Exception:
-                    continue
-                print(f"Duplicate-check: against #{rep_id}  sim={sim:.3f}")
-                if sim >= DUPLICATE_THRESHOLD:
-                    flash(f"This photo looks {int(sim*100)}% similar to an item already reported (ID #{rep_id}).", "warning")
+             
+                    # 🆕 FAISS‐backed duplicate check
+        if img_vec is not None and vs.id_map:
+            # Find up to 3 nearest neighbors by cosine similarity
+                dups = vs.search(img_vec, k=3)
+                top_id, top_score = dups[0]  # best match
+                print(f"FAISS-dup-check: against #{top_id}  score={top_score:.3f}")
+                if top_score >= DUPLICATE_THRESHOLD:
+                    flash(f"It looks like this item has already been reported (score: {top_score:.2f}).", "warning")
                     return redirect(url_for('report_found'))
-        # --- END DUPLICATE CHECK ------------------------------
+
 
 
 
@@ -304,6 +309,23 @@ def report_found():
         )
         db.session.add(rpt)
         db.session.commit()
+
+            # 🆕 Add the new image embedding into the FAISS index
+        vec = np.array([img_vec], dtype=np.float32)
+        faiss.normalize_L2(vec)
+        try:
+            vs.index.add(vec)
+        except AssertionError:
+            # Rebuild the FAISS index for the correct dimension
+            dim = vec.shape[1]
+            vs.index = faiss.IndexFlatIP(dim)
+            vs.index.add(vec)
+        vs.id_map.append(rpt.id)
+        # Persist updated index + ID map
+        faiss.write_index(vs.index, vs.index_path)
+        with open(vs.map_path, 'wb') as f:
+            pickle.dump(vs.id_map, f)
+
         flash('Report submitted!', 'success')
         return redirect(url_for('category_items', cat=form.category.data))
     return render_template('report_found.html', form=form)
@@ -461,6 +483,12 @@ def my_claims():
         order_by(ClaimRequest.timestamp.desc()).all()
     return render_template('myclaims.html', my_requests=my_requests)
 
+@app.route('/admin/search')
+@admin_only
+def admin_search():
+    """Page for admins to search reports via text or image."""
+    return render_template('admin_search.html')
+
 # ─── Init & Seed ────────────────────────────────────────────────────────────
 with app.app_context():
     db.create_all()
@@ -489,6 +517,7 @@ with app.app_context():
             roles=''
         ))
     db.session.commit()
+vs = VectorStore()
 
 @csrf.exempt
 @app.route("/api/check_match", methods=["POST"])
@@ -522,6 +551,53 @@ def api_check_match():
 
     ok = score >= AI_MATCH_THRESHOLD
     return jsonify({"ok": ok, "score": round(score, 3)})
+
+@csrf.exempt
+@app.route('/api/search', methods=['POST'])
+@admin_only
+def api_search():
+    """
+    Handle admin searches by text or image.
+    Returns JSON: { matches: [ {id, score, filename, description}, … ] }
+    """
+    # 1. Grab inputs
+    text = request.form.get('text', '').strip()
+    image = request.files.get('image')
+
+    if not text and not image:
+        return jsonify({'error': 'Provide text or image'}), 400
+
+    # 2. Compute embedding
+    if image:
+        # Save to temp file so our util can open it
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
+        image.save(tmp.name)
+        tmp.close()
+        try:
+            vec = get_image_vec(tmp.name)
+        finally:
+            os.unlink(tmp.name)
+    else:
+        vec = get_text_vec(text)
+
+    # 3. Run FAISS search
+    k = 5
+    raw = vs.search(vec, k)
+
+    # 4. Build match list with metadata
+    matches = []
+    for rid, score in raw:
+        rpt = Report.query.get(rid)
+        if not rpt:
+            continue
+        matches.append({
+            'id':          rpt.id,
+            'score':       score,
+            'filename':    rpt.filename,
+            'description': rpt.description
+        })
+
+    return jsonify({'matches': matches})
 
 
 if __name__ == '__main__':
