@@ -1,0 +1,84 @@
+{% extends 'layouts/base.html' %}
+{% block title %}Complaints Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-3">Ownership Complaints</h2>
+
+  {% if complaints %}
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>Actions</th>
+          <th>Report ID</th>
+          <th>User Email</th>
+          <th>Details (preview)</th>
+          <th>Quality Score</th>
+          <th>Created At</th>
+          <th>Proof Score</th>
+
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in complaints %}
+        
+        <tr>
+          <td>
+            <form method="post"
+                  action="{{ url_for('decide_complaint', comp_id=c.id, decision='accept') }}"
+                  style="display:inline">
+              {{ csrf_token() }}
+              <button class="btn btn-sm btn-success">Accept</button>
+            </form>
+            <form method="post"
+                  action="{{ url_for('decide_complaint', comp_id=c.id, decision='decline') }}"
+                  style="display:inline">
+              {{ csrf_token() }}
+              <button class="btn btn-sm btn-danger">Decline</button>
+            </form>
+          </td>
+
+          <td>{{ c.report_id }}</td>
+          <td>
+            {% if c.user %}
+                {{ c.user.email }}
+            {% else %}
+                —
+            {% endif %}
+          </td>
+
+          <td>{{ c.details[:60] }}{% if c.details|length > 60 %}…{% endif %}</td>
+          <td>
+            <div class="progress" style="height:8px;">
+            <div class="progress-bar
+                {% if c.quality_score > 0.7 %}
+                    bg-success
+                {% elif c.quality_score > 0.4 %}
+                    bg-warning
+                {% else %}
+                    bg-danger
+                {% endif %}"
+                role="progressbar"
+                style="width: {{ (c.quality_score * 100) | round(0) }}%;"
+
+            </div>
+            </div>
+          </td>
+          <td>{{ c.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td>
+            {% if c.proof_score is not none %}
+              {{ (c.proof_score * 100) | round(1) }}%
+            {% else %}
+              –
+            {% endif %}
+          </td>
+
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="text-muted">No complaints yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

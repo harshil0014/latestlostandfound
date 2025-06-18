@@ -5,44 +5,126 @@
   <title>My Claims</title>
   <style>
     body{font-family:sans-serif;padding:20px;}
-    table{width:100%;border-collapse:collapse;}
-    th,td{padding:8px;border:1px solid #ccc;}
+    table {
+      width:100%;
+      border-collapse:collapse;
+     
+    }
+    th,td{
+      padding:8px;
+      border:1px solid #ccc;
+      word-wrap:break-word;      /* ← force breaks */
+    }
+    /* Only complaints table gets fixed layout + colgroup */
+    table.complaints {
+      table-layout: fixed;
+    }
+
   </style>
+
 </head>
 <body>
   <h1>My Claim Requests</h1>
   <table>
-    <tr><th>Item #</th><th>Status</th><th>On</th><th>QR</th></tr>
-
+    <thead>
+      <tr>
+        <th>Item #</th>
+        <th>Status</th>
+        <th>On</th>
+        <th>QR</th>
+        <th>Upload Proof</th>
+      </tr>
+    </thead>
+    <tbody>
     {% for c in my_requests %}
       <tr>
+        <!-- 1: Item -->
         <td>{{ c.report_id }}</td>
+
+        <!-- 2: Status -->
         <td>{{ c.status.title() }}</td>
+
+        <!-- 3: Date -->
         <td>{{ c.timestamp.strftime('%Y-%m-%d') }}</td>
+
+        <!-- 4: QR code -->
         <td>
           {% if c.report.qr_code %}
-              <a href="{{ url_for('static', filename=c.report.qr_code) }}"
-                target="_blank" style="text-decoration:none">
-                View QR Code
-                <span style="
-                      background:#ffcc00;
-                      color:#000;
-                      font-size:0.7em;
-                      padding:2px 4px;
-                      margin-left:6px;
-                      border-radius:4px;">
-                  Scan me 📱
-                </span>
-              </a>
+            <a href="{{ url_for('static', filename=c.report.qr_code) }}" target="_blank">
+              View QR Code
+              <span style="
+                background:#ffcc00;
+                color:#000;
+                font-size:0.7em;
+                padding:2px 4px;
+                margin-left:6px;
+                border-radius:4px;
+              ">Scan me 📱</span>
+            </a>
           {% else %}
-              –
+            –
           {% endif %}
         </td>
 
-
+        <!-- 5: Proof upload (only when required) -->
+        <td>
+          {% if c.status.lower() == 'requires proof' %}
+            <form action="{{ url_for('upload_proof', claim_id=c.id) }}"
+                  method="POST" enctype="multipart/form-data">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              
+              <select name="proof_type" required>
+                <option value="">–Select–</option>
+                <option value="receipt">Receipt</option>
+                <option value="image">Image</option>
+              </select>
+              
+              <input type="file" name="proof_file" accept="image/*,application/pdf" required>
+              <button type="submit">Upload</button>
+            </form>
+          {% else %}
+            –
+          {% endif %}
+        </td>
       </tr>
     {% endfor %}
+    </tbody>
   </table>
+  
+  <h2>My Complaints</h2>
+  <table class="complaints">
+    <colgroup>
+      <col style="width: 80px;">
+      <col style="width: 300px;">
+      <col style="width: 100px;">
+      <col style="width: 120px;">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Item #</th>
+        <th>Details</th>
+        <th>Status</th>
+        <th>Submitted On</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for comp in complaints %}
+      <tr>
+        <td>{{ comp.report_id }}</td>
+        <td>{{ comp.details }}</td>
+
+        <td>{{ comp.status|default('Pending')|title }}</td>
+        <td>{{ comp.created_at.strftime('%Y-%m-%d') }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4">You have not filed any complaints.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+
   <p><a href="{{ url_for('show_home') }}">&larr; Back</a></p>
 </body>
 </html>

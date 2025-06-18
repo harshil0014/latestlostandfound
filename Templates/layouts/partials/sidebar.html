@@ -1,22 +1,29 @@
-<!-- Main Sidebar - Collapsible -->
-<nav id="sidebar" class="col-md-2 col-lg-2 d-none d-md-block bgGradDown sidebar min-vh-100 pt-4 position-fixed">
-  <div class="sidebar-sticky vh-100">
-    <!-- Collapse button -->
-    <div class="d-flex justify-content-end mb-3 px-3">
-      <button id="sidebarCollapse" class="btn btn-transparent">
-        <i id="sidebarIcon" class="fas fa-arrow-left text-white"></i>
-      </button>
-    </div>
+ <!-- Base layout -->
+ ...
+ <body>
+-  <div class="container-fluid">
+-    <div class="row">
+-      <!-- ❶  SIDEBAR  (remove) -->
+-      <nav class="col-md-2 col-lg-2 d-none d-md-block bg-dark sidebar
+-                  min-vh-100 pt-4 position-fixed">
+-        <div class="sidebar-sticky">
+-          <ul class="nav flex-column">
+-            {% include 'layouts/partials/sidebar_navigators.html' %}
+-          </ul>
+-        </div>
+-      </nav>
+-
+-      <!-- ❷  MAIN -->
+-      <main role="main"
+-            class="main-content col-md-10 col-lg-10 px-md-4 mt-4">
+-        {% block content %}{% endblock %}
+-      </main>
+-    </div>
+-  </div>
++  <main class="main-content container-fluid px-md-4 py-4">
++    {% block content %}{% endblock %}
++  </main>
+ ...
+ </body>
+ </html>
 
-    <!-- Sidebar links -->
-    <ul class="nav flex-column position-relative customHeight">
-      {% include 'layouts/partials/sidebar_navigators.html' %}
-    </ul>
-    <li>
-    <a href="{{ url_for('admin_search') }}">
-        <i class="fas fa-search"></i> Admin Search
-    </a>
-    </li>
-
-  </div>
-</nav>

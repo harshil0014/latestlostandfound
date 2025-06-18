@@ -30,6 +30,18 @@
             View photo
           </a>
         {% endif %}
+        <form action="{{ url_for('claim_report', report_id=r.id) }}" method="post">
+          <textarea name="claim_reason" rows="2" placeholder="Why is this item yours?" 
+                    oninput="evaluateClaimStrength(this.value)" style="width:100%;"></textarea>
+          <div id="strength-meter-{{ r.id }}" style="font-weight:bold; color:#888; margin-bottom:8px;">
+            ✏️ Start typing to evaluate your claim...
+          </div>
+          <button type="submit">Claim</button>
+        </form>
+
+        {% if r.claimed_by %}
+          <span class="claimed">Claimed by: {{ r.claimed_by }}</span>
+        {% endif %} 
 
         {% if not r.claimed %}
           <a href="{{ url_for('claim_report', report_id=r.id) }}" class="mark-claim">
@@ -47,6 +59,8 @@
       <li>No reports yet.</li>
     {% endfor %}
   </ul>
+  <script src="{{ url_for('static', filename='claim_strength.js') }}"></script>
+
 </body>
 </html>
 

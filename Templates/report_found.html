@@ -152,7 +152,14 @@
       {{ form.hidden_tag() }}
 
       <label>{{ form.description.label }}</label>
-      {{ form.description(size=50, id="desc") }}
+      <textarea name="description" id="reportDesc" required style="width:100%;"
+          oninput="evaluateReportStrength(this)"></textarea>
+
+      <div id="report-strength"
+          style="font-weight:bold;color:#888;margin:6px 0 10px;">
+        ✏️ Start typing to describe the item…
+      </div>
+
       <p id="ai-warning"
         style="color:#e74c3c; display:none; font-weight:bold;">
         ⚠️ The photo doesn’t seem to match your description. Please check!
@@ -230,9 +237,110 @@
         <br>
       {% endfor %}
 
-      <button type="submit">Submit Report</button>
+      <button type="submit" id="reportSubmitBtn" disabled>Submit Report</button>
+
     </form>
   </div>
+    <!-- ─── Debounce & Compression Helpers ───────────────────────────────────────── -->
+  <script>
+    // Debounce: wait `delay` ms after last event before running `fn`
+    function debounce(fn, delay) {
+      let timer;
+      return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+      };
+    }
+
+    // Compress an image file to max dimensions & quality, returns a Promise<Blob>
+    function compressImage(file, maxWidth = 800, maxHeight = 800, quality = 0.7) {
+      return new Promise(resolve => {
+        const img = new Image();
+        const reader = new FileReader();
+        reader.onload = e => { img.src = e.target.result; };
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxWidth || height > maxHeight) {
+            const scale = Math.min(maxWidth / width, maxHeight / height);
+            width *= scale; height *= scale;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width; canvas.height = height;
+          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+          canvas.toBlob(blob => resolve(blob), 'image/jpeg', quality);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // ─── Main Checker Logic ───────────────────────────────────────────────────────
+    document.addEventListener("DOMContentLoaded", () => {
+      // Grab the report form widgets
+      const desc    = document.getElementById("reportDesc");
+      const photo   = document.getElementById("photo");
+      const warn    = document.getElementById("ai-warning");
+      const btn     = document.getElementById("reportSubmitBtn");
+      const overlay = document.getElementById("ai-overlay");
+      btn.disabled  = true;
+
+      let pending = null;
+
+      // The function that sends image+text off to your API
+      async function checkMatch() {
+        if (!photo.files[0] || !desc.value.trim()) {
+          warn.style.display      = "none";
+          overlay.style.opacity   = 0;
+          overlay.style.visibility= "hidden";
+          btn.disabled            = true;
+          return;
+        }
+        // Abort any in-flight check
+        if (pending && !pending.signal.aborted) pending.abort();
+        pending = new AbortController();
+
+        // Compress before sending
+        const originalFile   = photo.files[0];
+        const compressedFile = await compressImage(originalFile);
+        console.log("Before:", originalFile.size, "bytes—After:", compressedFile.size, "bytes");
+
+        // Build the form data
+        const fd = new FormData();
+        fd.append("image", compressedFile, originalFile.name);
+        fd.append("text", desc.value.trim());
+
+        try {
+          overlay.style.visibility = "visible";
+          overlay.style.opacity    = 1;
+          const res = await fetch("/api/check_match", { method:"POST", body:fd, signal:pending.signal });
+          const js  = await res.json();
+
+          overlay.style.opacity     = 0;
+          overlay.style.visibility  = "hidden";
+
+          if (js.ok) {
+            warn.style.display = "none";
+            btn.disabled       = false;
+          } else {
+            warn.style.display = "block";
+            btn.disabled       = true;
+          }
+        } catch (err) {
+          if (err.name !== "AbortError") {
+            overlay.style.opacity     = 0;
+            overlay.style.visibility  = "hidden";
+            warn.style.display        = "none";
+            btn.disabled              = false;
+          }
+        }
+      }
+
+      // Debounce the calls so we wait 500ms after typing/uploading
+      const debouncedCheckMatch = debounce(checkMatch, 500);
+      photo.addEventListener("change", debouncedCheckMatch);
+      desc .addEventListener("input",  debouncedCheckMatch);
+    });
+  </script>
+  <!-- ────────────────────────────────────────────────────────────────────────────── -->
 
   <script>
     // Get references to the HTML elements we need
@@ -337,79 +445,7 @@
       });
     }
   </script>
-  <script>
-document.addEventListener("DOMContentLoaded", () => {
-  // ------------------------------------------------------------------
-  // grab widgets
-  const desc     = document.getElementById("desc");
-  const photo    = document.getElementById("photo");
-  const warn     = document.getElementById("ai-warning");
-  const btn      = document.querySelector("button[type=submit]");
-  btn.disabled = true;   // button begins in grey/disabled state
-
-  const overlay  = document.getElementById("ai-overlay");
-
-  let pending = null;          // keeps track of the running fetch
-
-  async function checkMatch () {
-    // need both inputs to start
-    if (!photo.files[0] || !desc.value.trim()) {
-      warn.style.display   = "none";
-      overlay.style.opacity = 0;
-      overlay.style.visibility = "hidden";
-      btn.disabled = true;         // still greyed-out until both given
-      return;
-    }
-
-    // cancel previous, if still in flight
-    if (pending && !pending.signal.aborted) pending.abort();
-    pending = new AbortController();
-
-    
-
-    const fd = new FormData();
-    fd.append("image", photo.files[0]);
-    fd.append("text",  desc.value.trim());
-
-    try {
-      overlay.style.visibility = "visible";
-      overlay.style.opacity    = 1;
-      const r  = await fetch("/api/check_match",
-                             { method:"POST", body:fd, signal:pending.signal });
-      const js = await r.json();
-
-      // hide spinner now
-      overlay.style.opacity = 0;
-      overlay.style.visibility = "hidden";
-
-      if (js.ok) {
-        warn.style.display = "none";
-        btn.disabled       = false;      // button turns blue
-      } else {
-        warn.style.display = "block";
-        btn.disabled       = true;       // stays grey
-      }
-    } catch (err) {
-      if (err.name !== "AbortError") {   // network or server error
-        overlay.style.opacity = 0;
-        overlay.style.visibility = "hidden";
-        warn.style.display = "none";
-        btn.disabled       = false;      // fail-open
-      }
-    }
-  }
-
-  // re-run checker after a short debounce
-  let timer;
-  function scheduleCheck () {
-    clearTimeout(timer);
-    timer = setTimeout(checkMatch, 350);   // 0.35 s pause
-  }
-
-  desc .addEventListener("input",  scheduleCheck);
-  photo.addEventListener("change", scheduleCheck);
-});
-</script>
+  
 
   
 
@@ -439,6 +475,7 @@ document.addEventListener("DOMContentLoaded", () => {
 <style>
 @keyframes spin{to{transform:rotate(360deg)}}
 </style>
+<script src="{{ url_for('static', filename='claim_strength.js') }}"></script>
 
 </body>
 </html>

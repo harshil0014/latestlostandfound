@@ -3,6 +3,7 @@
 
 import numpy as np
 from PIL import Image
+import pytesseract
 from sentence_transformers import SentenceTransformer
 
 # ---- Load the CLIP model only once ----
@@ -38,3 +39,12 @@ def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
     """0 = totally different, 1 = twins."""
     # a·b  /  (|a| * |b|)
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+
+def ocr_image_to_text(path: str) -> str:
+    """
+    Run OCR on the image at `path` and return the extracted text.
+    Requires: pip install pillow pytesseract
+    """
+    img = Image.open(path)
+    text = pytesseract.image_to_string(img)
+    return text.strip()

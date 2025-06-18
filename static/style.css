@@ -1,11 +1,32 @@
 /* Reset and base styles */
-body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f8f9fa;
-  color: #2c3e50;
-  margin: 0;
-  padding: 0;
+
+/* ───── Hero gradient banner ───────────────────────────── */
+.lf-hero {
+  background: linear-gradient(135deg, #2c3e50 0%, #4e8de6 100%);
+  position: relative;
+  overflow: hidden;
+  color: white; /* ensure text-white works */
 }
+
+/* ───── Category tiles ─────────────────────────────────── */
+.lf-card { background: #fff; border-radius: .5rem; }
+.lf-cat-tile { transition: transform .15s ease, box-shadow .15s ease; }
+.lf-cat-tile:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 .5rem 1rem rgba(0,0,0,.15);
+}
+
+/* Brand colours for each category */
+.lf-cat-books       { background:#6f42c1; }
+.lf-cat-stationary  { background:#d63384; }
+.lf-cat-accessories { background:#198754; }
+.lf-cat-others      { background:#fd7e14; }
+
+.lf-card {
+  padding: 1.5rem;
+  text-align: center;
+}
+
 
 /* Sidebar styles */
 .sidebar {
@@ -32,10 +53,7 @@ body {
 }
 
 /* Main content */
-.main-content {
-  padding: 24px;
-  margin-left: 220px;
-}
+
 
 /* Category buttons */
 .categories {
@@ -89,3 +107,64 @@ body {
     display: none;
   }
 }
+/* Remove bullets & indent from the sidebar list */
+.sidebar ul.nav.flex-column {
+  list-style: none;   /* no • symbols */
+  padding-left: 0;    /* no left indent */
+}
+
+
+/* ───── Category tiles ─────────────────────────────────── */
+.category-tile{
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.category-tile:hover{
+  transform: translateY(-4px);
+  box-shadow: 0 .5rem 1rem rgba(0,0,0,.15);
+}
+
+/* Brand colours for each category */
+.bg-books       { background:#6f42c1; }
+.bg-stationary  { background:#d63384; }
+.bg-accessories { background:#198754; }
+.bg-others      { background:#fd7e14; }
+
+/* ─── Fraud-check button ────────────────────────────────────────── */
+.btn-fraud {
+  display: inline-block;
+  background-color: #ffc107;      /* amber warning color */
+  color: #212529;                 /* dark text */
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.2s ease;
+}
+
+.btn-fraud:hover {
+  background-color: #e0a800;      /* darker amber on hover */
+  text-decoration: none;
+}
+/* Hide the sidebar whenever <body> has class="no-sidebar" */
+body.no-sidebar .sidebar {
+  display: none !important;
+}
+
+/* And allow the main content to fill the space */
+body.no-sidebar .main-content {
+  margin-left: 0 !important;
+}
+.form-container .btn-warning {
+  margin-bottom: 16px;
+}
+
+/* static/style.css */
+.form-container {
+  max-width: 600px;                   /* don’t be too wide */
+  margin: 40px auto;                  /* center it with top/bottom space */
+  background: #fff;                   /* white background */
+  padding: 24px;                      /* breathing room inside */
+  border-radius: 8px;                 /* slightly rounded corners */
+  box-shadow: 0 2px 12px rgba(0,0,0,0.1); /* soft drop shadow */
+}
+

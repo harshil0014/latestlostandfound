@@ -1,141 +1,140 @@
 {% extends 'layouts/base.html' %}
 {% block title %}Admin Search{% endblock %}
+{% block body_class %}no-sidebar{% endblock %}
+
 {% block content %}
-   
-    <style>
-      button[disabled] {
-        background: #95a5a6;   /* grey */
-        cursor: not-allowed;
-        opacity: 0.7;
-        transition: background-color 0.2s ease, opacity 0.2s ease;
-        pointer-events: none;
-      }
+{# ──────────────────────────────────────────────────────────────────────────── #}
+{# 1) Hide the top navbar & sidebar whenever <body class="no-sidebar">          #}
+{# ──────────────────────────────────────────────────────────────────────────── #}
+<style>
+  body.no-sidebar header.navbar,
+  body.no-sidebar nav#lfTopNav {
+    display: none !important;
+  }
+  body.no-sidebar main.main-content {
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+  }
+</style>
 
-      button[disabled]:hover {
-        background: #95a5a6;
-      }
+{# ──────────────────────────────────────────────────────────────────────────── #}
+{# 2) Card wrapper (white, shadowed)                                            #}
+{# ──────────────────────────────────────────────────────────────────────────── #}
+<style>
+  .form-container {
+    max-width: 600px;
+    margin: 40px auto;
+    background: #fff;
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+  }
+</style>
 
-      .form-container {
-        max-width: 500px;
-        margin: 40px auto;
-        background: #fff;
-        padding: 24px;
-        border-radius: 8px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        position: relative;
-        display: flex;
-        flex-direction: column;
-      }
+<div class="form-container">
 
-      .form-container h2 {
-        margin-top: 0;
-        text-align: center;
-        margin-bottom: 20px;
-      }
+  {# ────────────────────────────────────────────────────────────────────────── #}
+  {# 3) “Run Fraud Check” button styled with its own class so we don’t stomp   #}
+  {#    Bootstrap’s .btn-warning everywhere else.                               #}
+  {# ────────────────────────────────────────────────────────────────────────── #}
+  <a href="{{ url_for('run_fraud_check') }}"
+     class="btn-fraud w-100 mb-4 text-center">
+    <i class="fas fa-shield-alt me-2"></i>
+    Run Fraud Check
+  </a>
 
-      .form-container form input,
-      .form-container form button {
-        width: 100%;
-        padding: 10px;
-        margin: 8px 0;
-        box-sizing: border-box;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-      }
+  <h2 class="text-center mb-4">Admin Search</h2>
 
-      .form-container form button {
-        background-color: #3498db;
-        color: white;
-        border: none;
-        cursor: pointer;
-        font-size: 16px;
-        transition: background-color 0.3s ease;
-      }
+  {# ────────────────────────────────────────────────────────────────────────── #}
+  {# 4) Bootstrap-native form markup                                           #}
+  {# ────────────────────────────────────────────────────────────────────────── #}
+  <form id="search-form"
+        class="needs-validation"
+        enctype="multipart/form-data"
+        novalidate>
 
-      .form-container form button:hover {
-        background-color: #2980b9;
-      }
-    </style>
-
-    <div class="form-container">
-      <h2>Admin Search</h2>
-      <form id="search-form" enctype="multipart/form-data">
-      <label for="search-text">Search by description:</label><br>
-      <input type="text" id="search-text" name="text" placeholder="Enter description"><br><br>
-      
-      <label for="search-image">Or upload an image:</label><br>
-      <input type="file" id="search-image" name="image"><br><br>
-      
-      <button type="submit" disabled>Search</button>
-      </form>
-
-      <div id="search-results">
-      <!-- Results will appear here -->
-      </div>
+    <div class="mb-3">
+      <label for="search-text" class="form-label">
+        Search by description:
+      </label>
+      <input type="text"
+             class="form-control"
+             id="search-text"
+             name="text"
+             placeholder="Enter description"
+             required>
     </div>
-      <!-- We’ll add the form here next -->
-    
-      <script>
-          document
-              .getElementById('search-form')
-              .addEventListener('submit', async (e) => {
-              e.preventDefault();
 
-              const form = e.currentTarget;
-              const resultsDiv = document.getElementById('search-results');
-              resultsDiv.innerHTML = 'Searching…';
+    <div class="mb-4">
+      <label for="search-image" class="form-label">
+        Or upload an image:
+      </label>
+      <input type="file"
+             class="form-control"
+             id="search-image"
+             name="image"
+             required>
+    </div>
 
-              // Build FormData
-              const fd = new FormData();
-              const text = form.elements['text'].value.trim();
-              const image = form.elements['image'].files[0];
-              if (text)  fd.append('text', text);
-              if (image) fd.append('image', image);
+    <button type="submit"
+            class="btn btn-primary w-100"
+            disabled>
+      Search
+    </button>
+  </form>
 
-              // Call our API
-              const resp = await fetch('/api/search', {
-                  method: 'POST',
-                  body: fd
-              });
-              const data = await resp.json();
-
-              // Show “no matches” if none
-              if (!data.matches || data.matches.length === 0) {
-                  resultsDiv.innerHTML = '<p>No matches found.</p>';
-                  return;
-              }
-
-              // Otherwise build a list of results
-              resultsDiv.innerHTML = data.matches.map(m => `
-                  <div style="margin:12px 0; padding:8px; border:1px solid #ccc;">
-                  <img src="/static/uploads/${m.filename}" 
-                      width="80" style="vertical-align:middle; margin-right:8px;">
-                  <strong>#${m.id}</strong> (score ${m.score.toFixed(2)})<br>
-                  ${m.description}
-                  </div>
-              `).join('');
-              });
-      </script>
-      <script>
-      const form    = document.getElementById('search-form');
-      const textIn  = document.getElementById('search-text');
-      const fileIn  = document.getElementById('search-image');
-      const button  = form.querySelector('button[type="submit"]');
-
-      function toggleBtn() {
-      // enable only if there's text AND a file
-      const hasText = textIn.value.trim().length > 0;
-      const hasFile = fileIn.files.length > 0;
-      button.disabled = !(hasText && hasFile);
-      }
+  <div id="search-results" class="mt-4">
+    <!-- results will appear here -->
+  </div>
+</div>
 
 
-      textIn.addEventListener('input', toggleBtn);
-      fileIn.addEventListener('change',  toggleBtn);
+{# ──────────────────────────────────────────────────────────────────────────── #}
+{# 5) JavaScript to gate the button and do the fetch                           #}
+{# ──────────────────────────────────────────────────────────────────────────── #}
+<script>
+  const form    = document.getElementById('search-form');
+  const textIn  = document.getElementById('search-text');
+  const fileIn  = document.getElementById('search-image');
+  const button  = form.querySelector('button[type="submit"]');
+  const results = document.getElementById('search-results');
 
-      
-      </script>
-      
+  // Enable only when both fields are filled
+  function toggleBtn() {
+    button.disabled = !(
+      textIn.value.trim().length > 0 &&
+      fileIn.files.length > 0
+    );
+  }
+  textIn.addEventListener('input', toggleBtn);
+  fileIn.addEventListener('change',  toggleBtn);
 
+  // Submit handler
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    results.innerHTML = '<em>Searching…</em>';
 
+    const fd   = new FormData(form);
+    const resp = await fetch('/api/search', { method: 'POST', body: fd });
+    const data = await resp.json();
+
+    if (!data.matches?.length) {
+      results.innerHTML = '<p>No matches found.</p>';
+      return;
+    }
+
+    // Render results
+    results.innerHTML = data.matches.map(m => `
+      <div class="border p-3 mb-3 d-flex align-items-center">
+        <img src="/static/uploads/${m.filename}"
+             width="80"
+             class="me-3">
+        <div>
+          <strong>#${m.id}</strong> (score ${m.score.toFixed(2)})<br>
+          ${m.description}
+        </div>
+      </div>
+    `).join('');
+  });
+</script>
 {% endblock %}
