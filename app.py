@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from datetime import date,timedelta
 from datetime import datetime
 
-
+from wtforms.validators import Optional
 
 from functools import wraps
 import numpy as np
@@ -23,12 +23,14 @@ from flask_login import UserMixin
 from werkzeug.security import check_password_hash
 
 
-
 from flask import (
     Flask, render_template, request, redirect, url_for,
     session, flash, abort, jsonify
 )
 # ... existing imports ...
+
+from PIL import Image, ImageFilter
+
 
 # --- AI helpers ---
 
@@ -193,7 +195,6 @@ def generate_qr(data: str) -> str:
     return rel_path
      # something we can embed as /static/qr/...
 
-
 # ─── Models ─────────────────────────────────────────────────────────────────
 class User(UserMixin, db.Model):
     id            = db.Column(db.Integer, primary_key=True)
@@ -208,7 +209,7 @@ class User(UserMixin, db.Model):
 class Report(db.Model):
     id          = db.Column(db.Integer, primary_key=True)
     email       = db.Column(db.String, nullable=False)
-    filename    = db.Column(db.String, nullable=False)
+    filenames   = db.Column(db.PickleType, nullable=True)
     description = db.Column(db.String, nullable=False)
     location    = db.Column(db.String, nullable=False)
     date_found  = db.Column(db.String, nullable=False)  # 'YYYY-MM-DD'
@@ -221,6 +222,8 @@ class Report(db.Model):
     img_emb = db.Column(db.PickleType)  # stores the image vector
     priority_score = db.Column(db.Float, default=0.0)
     qr_code      = db.Column(db.String, nullable=True)   # holds 'qr/<uuid>.png'
+    matched_report_id = db.Column(db.Integer, nullable=True)  # ID of matched lost item
+    notification_sent = db.Column(db.Boolean, default=False)  # Track if owner was notified
 
 
 
@@ -303,8 +306,30 @@ class ReportForm(FlaskForm):
         DataRequired(), Length(max=20),
         Regexp(r'^\d{10}$', message="Only digits, +, -, spaces allowed.")
     ])
-    photo = FileField('Photo', validators=[DataRequired()])
+    photo = FileField('Photos', render_kw={"multiple": True}, validators=[DataRequired()])
 
+
+class ReportFormLost(FlaskForm):
+    description = StringField('Description', validators=[
+        DataRequired(), Length(max=100),
+        Regexp(r'^[A-Za-z0-9\s\.!\-]+$', message="Only letters, numbers, spaces, and .!- allowed.")
+    ])
+    location = StringField('Location', validators=[
+        DataRequired(), Length(max=50),
+        Regexp(r'^[A-Za-z0-9\s,\-]+$', message="Only letters, numbers, spaces, commas, dashes allowed.")
+    ])
+    date_lost = DateField('Date Lost', validators=[DataRequired()], format='%Y-%m-%d')
+    category = SelectField('Category', validators=[DataRequired()], choices=[
+        ('accessories','Accessories'),
+        ('books','Books'),
+        ('stationary','Stationary'),
+        ('others','Others')
+    ])
+    contact = TelField('Contact', validators=[
+        DataRequired(), Length(max=20),
+        Regexp(r'^\d{10}$', message="Only digits, +, -, spaces allowed.")
+    ])
+    photo = FileField('Photos(Optional)', validators=[Optional()])  # ✅ optional
 
 # ------------------------
 # ComplaintForm  (NEW)
@@ -345,18 +370,33 @@ def admin_only(f):
 @app.route('/allow-reports')
 @admin_only
 def allow_reports():
-    pending_reports=Report.query.filter_by(received=False).order_by(
-            Report.priority_score.desc(),
-            Report.timestamp.desc()
-        ).all()
+    view = request.args.get('view', 'found')  # default to 'found'
 
-    return render_template('allow_reports.html',reports=pending_reports)
+    query = Report.query.order_by(
+        Report.priority_score.desc(),
+        Report.timestamp.desc()
+    )
+
+    if view == 'found':
+        reports = query.filter_by(received=False, claimed=False).all()
+    elif view == 'lost':
+        reports = query.filter_by(received=False, claimed=True).all()
+    else:
+        # fallback: avoid crash
+        reports = []
+
+    return render_template('allow_reports.html', reports=reports, view=view)
 
 
 @app.route('/allow-report/<int:report_id>/accept', methods=['POST'])
 @admin_only
 def accept_report(report_id):
     rpt = Report.query.get_or_404(report_id)
+    
+    # NEW CHECK: Require notification for matched items
+    if rpt.matched_report_id and not rpt.notification_sent:
+        return jsonify(error="Must notify owner before approval"), 400
+    
     rpt.received = True
     db.session.commit()
     return ('', 204)
@@ -443,7 +483,6 @@ def complain(report_id):
 
 
 
-
 @app.route('/logout')
 def logout():
     session.clear()
@@ -460,6 +499,58 @@ def help():
 def settings():
     return render_template('settings.html')
 
+@app.route('/report-lost', methods=['GET', 'POST'])
+@login_required
+def report_lost():
+    form = ReportFormLost()
+
+    session.pop('_flashes', None)
+
+    if request.method == 'POST' and form.validate_on_submit():
+        desc = bleach.clean(form.description.data)
+        category = predict_category(desc)
+        if form.category.data != category:
+            flash(f"This item was stored under '{category.title()}' instead of '{form.category.data.title()}' because it matched better.")
+            form.category.data = category
+
+        filenames = []
+        uploaded_files = request.files.getlist('photo')
+        for f in uploaded_files:
+            if f and f.filename:
+                filename = secure_filename(f.filename)
+                path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                f.save(path)
+                filenames.append(filename)
+
+        img_vec = None
+        if filenames:
+            try:
+                img_vec = get_image_vec(os.path.join(app.config['UPLOAD_FOLDER'], filenames[0]))
+            except:
+                pass  # skip embedding if failed
+
+        rpt = Report(
+            email       = current_user.email,
+            filenames   = filenames,
+            description = desc,
+            location    = form.location.data,
+            date_found  = form.date_lost.data.strftime('%Y-%m-%d'),  # using date_found field
+            category    = form.category.data,
+            contact     = form.contact.data,
+            claimed     = True,     # LOST implies already claimed
+            received    = False,    # Awaiting admin approval
+            img_emb     = img_vec,
+            priority_score = compute_priority(desc)
+        )
+        db.session.add(rpt)
+        db.session.commit()
+
+        flash('Lost item reported! Awaiting admin approval.', 'success')
+        return redirect(url_for('report_lost'))
+
+    return render_template('report_lost.html', form=form)
+
+
 @app.route('/report-found', methods=['GET','POST'])
 @csrf.exempt
 @login_required
@@ -471,76 +562,118 @@ def report_found():
             flash(f"This item was stored under '{predicted.title()}' instead of '{form.category.data.title()}' because it matched better.")
             form.category.data = predicted
 
-        f = form.photo.data
-        filename = secure_filename(f.filename)
-        f.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                # --- NEW: compute image embedding ---
-        img_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        try:
-            img_vec = get_image_vec(img_path)
-        except Exception as e:
-            img_vec = None  # fallback if something goes wrong
+        uploaded_files = request.files.getlist('photo')
+        filenames = []
+
+        for f in uploaded_files:
+            if f and f.filename:
+                filename = secure_filename(f.filename)
+                save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                f.save(save_path)
+
+                # Blur and save as blurred_<filename>
+                img = Image.open(save_path)
+                blurred = img.filter(ImageFilter.GaussianBlur(radius=10))
+                blurred.save(os.path.join(app.config['UPLOAD_FOLDER'], 'blurred_' + filename))
+
+                filenames.append(filename)
+
+        # --- Compute image embedding ---
+        img_vec = None
+        if filenames:
+            try:
+                img_path = os.path.join(app.config['UPLOAD_FOLDER'], filenames[0])
+                img_vec = get_image_vec(img_path)
+            except Exception as e:
+                print(f"Error computing image vector: {e}")
+                img_vec = None
 
         desc = bleach.clean(form.description.data)
-                # ---- DESCRIPTION-vs-PHOTO GUARD ----
+        
+        # ---- DESCRIPTION-vs-PHOTO GUARD ----
         if img_vec is not None:
-            text_vec   = get_text_vec(desc)
+            text_vec = get_text_vec(desc)
             similarity = cosine_sim(img_vec, text_vec)
             print(f"Mismatch-check sim={similarity:.3f}")
             if similarity < AI_MATCH_THRESHOLD:
-                flash("The photo doesn’t seem to match the description. Please revise.", "warning")
+                flash("The photo doesn't seem to match the description. Please revise.", "warning")
                 return redirect(url_for('report_found'))
         # ---- END GUARD ----
 
-             
-                    # 🆕 FAISS‐backed duplicate check
+        # ---- FAISS-backed duplicate check ----
         if img_vec is not None and vs.id_map:
             # Find up to 3 nearest neighbors by cosine similarity
-                dups = vs.search(img_vec, k=3)
+            dups = vs.search(img_vec, k=3)
+            if dups:
                 top_id, top_score = dups[0]  # best match
                 print(f"FAISS-dup-check: against #{top_id}  score={top_score:.3f}")
                 if top_score >= DUPLICATE_THRESHOLD:
                     flash(f"It looks like this item has already been reported (score: {top_score:.2f}).", "warning")
                     return redirect(url_for('report_found'))
 
-
-
-
-       
+        # Create and save the new report
         rpt = Report(
             email = current_user.email,
-            filename    = filename,
+            filenames = filenames,
             description = desc,
-            location    = form.location.data,
-            date_found  = form.date_found.data.strftime('%Y-%m-%d'),
-            category    = form.category.data,
-            contact     = form.contact.data,
-            received    = False,
-            img_emb     = img_vec,
+            location = form.location.data,
+            date_found = form.date_found.data.strftime('%Y-%m-%d'),
+            category = form.category.data,
+            contact = form.contact.data,
+            received = False,
+            img_emb = img_vec,
             priority_score = compute_priority(desc),
-
+            matched_report_id = None  # Initialize as None
         )
         db.session.add(rpt)
         db.session.commit()
 
-            # 🆕 Add the new image embedding into the FAISS index
-        vec = np.array([img_vec], dtype=np.float32)
-        faiss.normalize_L2(vec)
-        try:
-            vs.index.add(vec)
-        except AssertionError:
-            # Rebuild the FAISS index for the correct dimension
-            dim = vec.shape[1]
-            vs.index = faiss.IndexFlatIP(dim)
-            vs.index.add(vec)
-        vs.id_map.append(rpt.id)
-        # Persist updated index + ID map
-        faiss.write_index(vs.index, vs.index_path)
-        with open(vs.map_path, 'wb') as f:
-            pickle.dump(vs.id_map, f)
+        # Update FAISS index
+        if img_vec is not None:
+            vec = np.array([img_vec], dtype=np.float32)
+            faiss.normalize_L2(vec)
+            try:
+                vs.index.add(vec)
+            except AssertionError:
+                # Rebuild the FAISS index for the correct dimension
+                dim = vec.shape[1]
+                vs.index = faiss.IndexFlatIP(dim)
+                vs.index.add(vec)
+            vs.id_map.append(rpt.id)
+            # Persist updated index + ID map
+            faiss.write_index(vs.index, vs.index_path)
+            with open(vs.map_path, 'wb') as f:
+                pickle.dump(vs.id_map, f)
 
-        flash('Report submitted!', 'success')
-        return redirect(url_for('category_items', cat=form.category.data))
+        # --- AUTOMATIC MATCHING WITH LOST ITEMS ---
+        # Get all approved lost items (claimed and approved by admin)
+        lost_items = Report.query.filter_by(claimed=True, received=True).all()
+        
+        best_match = None
+        highest_score = 0
+        MATCH_THRESHOLD = 0.7  # Similarity threshold for a match
+        
+        for lost_item in lost_items:
+            # Compare descriptions using AI text vectors
+            found_vec = get_text_vec(rpt.description)
+            lost_vec = get_text_vec(lost_item.description)
+            similarity = cosine_sim(found_vec, lost_vec)
+            
+            # Check if this is the best match above threshold
+            if similarity > highest_score and similarity >= MATCH_THRESHOLD:
+                highest_score = similarity
+                best_match = lost_item
+
+        # Save the best match if found
+        if best_match:
+            rpt.matched_report_id = best_match.id
+            db.session.commit()
+            flash(f'Report submitted! Potential match found with lost item #{best_match.id}', 'success')
+        else:
+            flash('Report submitted!', 'success')
+            
+        return redirect(url_for('report_found', cat=form.category.data))
+    
     return render_template('report_found.html', form=form)
 
 from sqlalchemy import or_
@@ -561,21 +694,27 @@ def found_items():
 @login_required
 def category_items(cat):
     filter_date = request.args.get('filter_date')
-    q = db.session.query(Report).filter(
-        func.lower(Report.category) == cat.lower(),
-        Report.received == True
-    ).order_by(Report.timestamp.desc())
+    view_type = request.args.get('view', 'found')  # default to found
+
+    query = db.session.query(Report).filter(
+        func.lower(Report.category) == cat.lower()
+    )
+
+    if view_type == 'found':
+        query = query.filter(Report.received == True, Report.claimed == False)
+    elif view_type == 'lost' and current_user.is_admin:
+        query = query.filter(Report.received == True, Report.claimed == True)
 
     if filter_date:
-        q = q.filter_by(date_found=filter_date)
-    items = q.order_by(Report.timestamp.desc()).all()
+        query = query.filter_by(date_found=filter_date)
+
+    items = query.order_by(Report.timestamp.desc()).all()
 
     items_for_js = [
         {'id': i.id, 'description': i.description, 'location': i.location}
         for i in items
     ]
 
-    all_dates = [r.date_found for r in Report.query.with_entities(Report.date_found)]
     max_date = date.today().isoformat()
     min_date = (date.today() - timedelta(days=6)).isoformat()
 
@@ -593,7 +732,8 @@ def category_items(cat):
         min_date=min_date,
         max_date=max_date,
         filter_date=filter_date,
-        user_claims=user_claims
+        user_claims=user_claims,
+        view=view_type
     )
 
 # AJAX‐style Claim → JSON
@@ -982,6 +1122,28 @@ def decide_complaint(comp_id, decision):
         flash("Complaint declined.", "info")
     db.session.commit()
     return redirect(url_for("admin_complaints"))
+
+@app.context_processor
+def inject_models():
+    return dict(Report=Report)
+
+@app.route('/notify-owner/<int:report_id>', methods=['POST'])
+@admin_only
+def notify_owner(report_id):
+    found_report = Report.query.get_or_404(report_id)
+    if not found_report.matched_report_id:
+        return jsonify(success=False, error="No matched lost item"), 400
+    
+    lost_report = Report.query.get_or_404(found_report.matched_report_id)
+    
+    # In real app, you would send an email here
+    print(f"Notifying {lost_report.email} about potential match for item {lost_report.id}")
+    
+    # Update status
+    found_report.notification_sent = True
+    db.session.commit()
+    
+    return jsonify(success=True)
 
 if __name__ == '__main__':
     app.run(debug=True)

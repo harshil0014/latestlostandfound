@@ -96,5 +96,35 @@
     {% endfor %}
     <p><a href="{{ url_for('show_home') }}">← Back to Dashboard</a></p>
   </div>
+  <!-- Floating Help Button -->
+  <button id="helpBtn"
+    style="position:fixed; top:20px; right:20px; z-index:1000;
+          background:#3498db; color:#fff; border:none; border-radius:50%;
+          width:40px; height:40px; font-size:20px; cursor:pointer;"
+    title="Help using this page">
+    ?
+  </button>
+
+  <!-- Help Modal -->
+  <div id="helpModal" style="display:none; position:fixed; top:0; left:0;
+      width:100%; height:100%; background:rgba(0,0,0,0.5);
+      justify-content:center; align-items:center; z-index:1001;">
+    <div style="background:#fff; padding:20px; border-radius:8px;
+                max-width:500px; width:90%; position:relative;">
+      <button onclick="document.getElementById('helpModal').style.display='none'"
+              style="position:absolute; top:8px; right:12px; font-size:18px; background:none; border:none; cursor:pointer;">
+        ✖
+      </button>
+      <h3 style="margin-top:0;">🔍 Help: {{ help_title }}</h3>
+      <p style="margin-top:10px; white-space:pre-wrap;">{{ help_text }}</p>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById("helpBtn").onclick = function() {
+      document.getElementById("helpModal").style.display = "flex";
+    };
+  </script>
+
 </body>
 </html>

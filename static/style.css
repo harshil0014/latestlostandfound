@@ -167,4 +167,56 @@ body.no-sidebar .main-content {
   border-radius: 8px;                 /* slightly rounded corners */
   box-shadow: 0 2px 12px rgba(0,0,0,0.1); /* soft drop shadow */
 }
+.image-carousel {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+
+
+.carousel-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.image-carousel {
+  display: flex;                   /* key! shows images in a row */
+  overflow-x: auto;                /* lets it scroll horizontally */
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  gap: 10px;
+  padding: 8px 36px;
+  max-width: 100%;
+}
+
+
+
+.carousel-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  background-color: rgba(0, 0, 0, 0.4);
+  color: white;
+  border: none;
+  font-size: 20px;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.3s ease;
+}
+
+.carousel-arrow:hover {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+.carousel-arrow.left {
+  left: 0;
+}
+
+.carousel-arrow.right {
+  right: 0;
+}
 

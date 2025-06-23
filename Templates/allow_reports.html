@@ -74,28 +74,176 @@
     .delete-btn:hover {
       background: #96281b;
     }
+    .toggle-buttons {
+      display: inline-flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .toggle-buttons a {
+      padding: 8px 16px;
+      border: 2px solid #3498db;
+      background-color: #fff;
+      color: #3498db;
+      font-weight: 500;
+      border-radius: 6px;
+      text-decoration: none;
+      transition: all 0.3s ease;
+    }
+
+    .toggle-buttons a.active {
+      background-color: #3498db;
+      color: white;
+    }
+
+    .toggle-buttons a:hover {
+      background-color: #2980b9;
+      color: white;
+      border-color: #2980b9;
+    }
+    .carousel-wrapper {
+      position: relative;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .image-carousel {
+      display: flex;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
+      gap: 12px;
+      padding: 8px 36px;
+      max-width: 100%;
+    }
+
+    .carousel-image {
+      flex: 0 0 auto;
+      height: 160px;
+      width: 240px;
+      object-fit: cover;
+      scroll-snap-align: center;
+      border-radius: 6px;
+    }
+
+    .carousel-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 5;
+      background-color: rgba(0,0,0,0.4);
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      font-size: 20px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .carousel-arrow.left { left: 6px; }
+    .carousel-arrow.right { right: 6px; }
+    
+    /* NEW STYLES FOR MATCH NOTIFICATION */
+    .match-notice {
+      background: #fff8e1;
+      padding: 10px;
+      border-radius: 5px;
+      margin-top: 10px;
+      font-size: 0.85rem;
+      border-left: 4px solid #ffc107;
+    }
+    .match-notice strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+    .notify-btn {
+      background: #ff9800;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 8px;
+      font-size: 0.8rem;
+    }
+    .notify-btn:hover {
+      background: #e68a00;
+    }
+    .notified {
+      color: #28a745;
+      font-weight: bold;
+      margin-top: 8px;
+      display: inline-block;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h2>Pending Reports for Approval</h2>
+    <div class="toggle-buttons">
+      <a href="{{ url_for('allow_reports', view='found') }}"
+        class="{{ 'found' == request.args.get('view', 'found') and 'active' or '' }}">
+        Found
+      </a>
+      <a href="{{ url_for('allow_reports', view='lost') }}"
+        class="{{ 'lost' == request.args.get('view', 'found') and 'active' or '' }}">
+        Lost
+      </a>
+    </div>
+
     <div class="card-grid">
       {% for item in reports %}
         <div class="card" data-id="{{ item.id }}">
-          <img
-            src="{% if item.filename %}
-                     {{ url_for('static', filename='uploads/' ~ item.filename) }}
-                   {% else %}
-                     {{ url_for('static', filename='images/placeholder.png') }}
-                   {% endif %}"
-            alt="{{ item.description }}"
-          />
+          {% if item.filenames %}
+            <div class="carousel-wrapper">
+              <button class="carousel-arrow left" onclick="scrollCarousel(this, -1)">&#10094;</button>
+              <div class="image-carousel">
+                {% for fname in item.filenames %}
+                  <img src="{{ url_for('static', filename='uploads/' + fname) }}"
+                      class="carousel-image" alt="Report image" />
+                {% endfor %}
+              </div>
+              <button class="carousel-arrow right" onclick="scrollCarousel(this, 1)">&#10095;</button>
+            </div>
+          {% else %}
+            <img src="{{ url_for('static', filename='images/placeholder.png') }}"
+                alt="No image" class="carousel-image" />
+          {% endif %}
+
           <div class="card-body">
             <p><strong>{{ item.description }}</strong></p>
             <p>Location: {{ item.location }}</p>
             <p>Date: {{ item.date_found }}</p>
             <p>Reported by: {{ item.email }}</p>
+            
+            {% if item.matched_report_id %}
+              {% set lost_item = Report.query.get(item.matched_report_id) %}
+              <div class="match-notice"
+              data-matched-images='[
+                {% for fname in lost_item.filenames %}
+                  "{{ url_for('static', filename='uploads/' + fname) }}"{% if not loop.last %},{% endif %}
+                {% endfor %}
+              ]'
+                <i class="fas fa-bell"></i> 
+                <strong>Potential match found!</strong>
+                <div>Matches lost item: {{ lost_item.description }}</div>
+                <div>Owner: {{ lost_item.email }}</div>
+                
+                {% if not item.notification_sent %}
+                  <button onclick="sendNotification({{ item.id }})" class="notify-btn">
+                    <i class="fas fa-paper-plane"></i> Notify Owner
+                  </button>
+                {% else %}
+                  <span class="notified"><i class="fas fa-check-circle"></i> Owner notified ✓</span>
+                {% endif %}
+              </div>
+            {% endif %}
+            {% if lost_item.filenames %}
+              <button class="notify-btn" onclick="showMatchedImageModal({{ item.id }})">
+                🖼️ View Matched Image
+              </button>
+            {% endif %}
           </div>
+          
           <div class="card-footer">
             <button class="action-btn accept-btn"
               onclick='event.stopPropagation();
@@ -103,7 +251,14 @@
                          fetch("{{ url_for("accept_report", report_id=item.id) }}", {
                            method:"POST",
                            headers:{"X-CSRFToken": document.querySelector("meta[name=csrf-token]").getAttribute("content")}
-                         }).then(()=>location.reload());
+                         })
+                         .then(response => {
+                           if (response.ok) {
+                             location.reload();
+                           } else {
+                             response.json().then(data => alert(data.error));
+                           }
+                         });
                        }'>
               ✅ Accept
             </button>
@@ -126,5 +281,113 @@
     <br>
     <a href="{{ url_for('show_home') }}">&larr; Back to Dashboard</a>
   </div>
+  
+  <script>
+function scrollCarousel(button, direction) {
+  const wrapper = button.closest('.carousel-wrapper');
+  const carousel = wrapper.querySelector('.image-carousel');
+  const scrollAmount = carousel.clientWidth * 0.8;
+  carousel.scrollBy({
+    left: direction * scrollAmount,
+    behavior: 'smooth'
+  });
+}
+
+// ✅ Moved outside scrollCarousel
+function sendNotification(reportId) {
+  fetch(`/notify-owner/${reportId}`, {
+      method: 'POST',
+      headers: {
+          'X-CSRFToken': document.querySelector("meta[name=csrf-token]").content
+      }
+  })
+  .then(response => response.json())
+  .then(data => {
+      if(data.success) {
+          alert('Owner notified successfully!');
+          location.reload();
+      } else {
+          alert('Error: ' + (data.error || 'Notification failed'));
+      }
+  })
+  .catch(error => {
+      console.error('Error:', error);
+      alert('An error occurred while sending notification');
+  });
+}
+</script>
+<div id="matchedImageModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); justify-content:center; align-items:center; z-index:1000;">
+  <div style="background:white; padding:20px; border-radius:8px; max-width:90%; max-height:90%; overflow:auto; position:relative;">
+    <button onclick="closeMatchedModal()" style="position:absolute; top:8px; right:12px; font-size:18px;">✖</button>
+    <h3 style="margin-top:0;">Matched Lost Item Images</h3>
+    <div style="display:flex; gap:10px; overflow-x:auto; max-width:100%;">
+      <div id="matchedImageContainer" style="display:flex; gap:12px;">
+        <!-- Images will be injected here -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showMatchedImageModal(reportId) {
+  const card = document.querySelector(`[data-id="${reportId}"]`);
+  const imageJson = card.querySelector('.match-notice').dataset.matchedImages;
+  const images = JSON.parse(imageJson || '[]');
+
+  const container = document.getElementById('matchedImageContainer');
+  container.innerHTML = ''; // Clear previous
+
+  if (images.length === 0) {
+    container.innerHTML = '<p>No matched images available.</p>';
+  } else {
+    images.forEach(url => {
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = 'Matched lost item image';
+      img.style.maxHeight = '60vh';
+      img.style.borderRadius = '6px';
+      img.style.boxShadow = '0 2px 6px rgba(0,0,0,0.2)';
+      img.style.objectFit = 'contain';
+      container.appendChild(img);
+    });
+  }
+
+  document.getElementById('matchedImageModal').style.display = 'flex';
+}
+
+function closeMatchedModal() {
+  document.getElementById('matchedImageModal').style.display = 'none';
+}
+</script>
+<!-- Floating Help Button -->
+<button id="helpBtn"
+  style="position:fixed; top:20px; right:20px; z-index:1000;
+         background:#3498db; color:#fff; border:none; border-radius:50%;
+         width:40px; height:40px; font-size:20px; cursor:pointer;"
+  title="Help using this page">
+  ?
+</button>
+
+<!-- Help Modal -->
+<div id="helpModal" style="display:none; position:fixed; top:0; left:0;
+     width:100%; height:100%; background:rgba(0,0,0,0.5);
+     justify-content:center; align-items:center; z-index:1001;">
+  <div style="background:#fff; padding:20px; border-radius:8px;
+              max-width:500px; width:90%; position:relative;">
+    <button onclick="document.getElementById('helpModal').style.display='none'"
+            style="position:absolute; top:8px; right:12px; font-size:18px; background:none; border:none; cursor:pointer;">
+      ✖
+    </button>
+    <h3 style="margin-top:0;">🔍 Help: {{ help_title }}</h3>
+    <p style="margin-top:10px; white-space:pre-wrap;">{{ help_text }}</p>
+  </div>
+</div>
+
+<script>
+  document.getElementById("helpBtn").onclick = function() {
+    document.getElementById("helpModal").style.display = "flex";
+  };
+</script>
+
 </body>
 </html>

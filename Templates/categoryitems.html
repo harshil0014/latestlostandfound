@@ -69,6 +69,7 @@
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
       gap: 20px;
+      align-items: stretch;
     }
     .card {
       background: #fff;
@@ -76,10 +77,9 @@
       overflow: hidden;
       box-shadow: 0 2px 6px rgba(0,0,0,0.1);
       display: flex; flex-direction: column;
+      height: 100%;
     }
-    .card img {
-      width: 100%; height: 160px; object-fit: cover;filter: blur(5px); transition: filter 0.3s ease-in-out;
-    }
+    
     .card-body { padding: 12px 16px; flex: 1; }
     .card-body p { margin: 4px 0; font-size: 0.95rem; }
     .card-footer {
@@ -87,12 +87,73 @@
       display: flex; align-items: center;
       justify-content: space-between;
     }
+    .carousel-wrapper {
+      position: relative;
+      width: 100%;
+      height: 160px;
+      overflow: hidden;
+    }
+
+    .image-carousel {
+      display: flex;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
+      gap: 12px;
+      padding: 8px 36px;
+      max-width: 100%;
+      height: 100%;
+    }
+
+    .carousel-image {
+      flex: 0 0 auto;
+      height: 160px;
+      width: 240px;
+      object-fit: cover;
+      scroll-snap-align: center;
+      border-radius: 6px;
+      transition: transform 0.3s ease;
+    }
+
+    /* Only apply blur to found items */
+    .carousel-image.blurred {
+      filter: blur(5px);
+    }
+
+    .carousel-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 5;
+      background-color: rgba(0,0,0,0.4);
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      font-size: 20px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .carousel-wrapper {
+      position: relative;
+      width: 100%;
+      height: 160px; 
+      overflow: hidden;
+    }
+
+    .carousel-arrow.left { left: 6px; }
+    .carousel-arrow.right { right: 6px; }
+    .carousel-wrapper:hover .carousel-image:hover {
+      transform: scale(1.2);  /* zoom in */
+      z-index: 10;
+    }
+
     .blur-text {
       filter: blur(4px);         
       user-select: none;           
       color: #999 !important;      
     }
-
+    
     .status-indicator {
       font-size: 0.9rem; padding: 4px 8px;
       border-radius: 4px; font-weight: 500;
@@ -120,6 +181,33 @@
       font-weight: 500;
     }
     .back-btn:hover { text-decoration: underline; }
+    .toggle-buttons {
+      display: inline-flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .toggle-buttons a {
+      padding: 8px 16px;
+      border: 2px solid #3498db;
+      background-color: #fff;
+      color: #3498db;
+      font-weight: 500;
+      border-radius: 6px;
+      text-decoration: none;
+      transition: all 0.3s ease;
+    }
+
+    .toggle-buttons a.active {
+      background-color: #3498db;
+      color: white;
+    }
+
+    .toggle-buttons a:hover {
+      background-color: #2980b9;
+      color: white;
+      border-color: #2980b9;
+    }
   </style>
 </head>
 <body>
@@ -137,6 +225,20 @@
     </aside>
 
     <section class="main">
+      {% if 'admin' in roles %}
+        <div class="toggle-buttons">
+          <a href="{{ url_for('category_items', cat=category, view='found') }}"
+            class="{% if view == 'found' %}active{% endif %}">
+            Found
+          </a>
+          <a href="{{ url_for('category_items', cat=category, view='lost') }}"
+            class="{% if view == 'lost' %}active{% endif %}">
+            Lost
+          </a>
+        </div>
+      {% endif %}
+
+
       <div class="search-bar">
         <input
           type="text"
@@ -168,35 +270,52 @@
       <div class="card-grid">
         {% for item in items %}
           <div class="card" data-id="{{ item.id }}">
-            {% if item.filename %}
-              <img src="{{ url_for('static', filename='uploads/' ~ item.filename) }}" alt="{{ item.description }}" />
+            {% if item.filenames %}
+              <div class="carousel-wrapper">
+                <button class="carousel-arrow left" onclick="scrollCarousel(this, -1)">&#10094;</button>
+                <div class="image-carousel">
+                  {% for fname in item.filenames %}
+                    <img src="{{ url_for('static', filename=(('uploads/blurred_' if view == 'found' else 'uploads/') ~ fname)) }}"
+                        class="carousel-image {{ 'blurred' if view == 'found' else '' }}"
+                        alt="Item image" />
+                  {% endfor %}
+                </div>
+                <button class="carousel-arrow right" onclick="scrollCarousel(this, 1)">&#10095;</button>
+              </div>
             {% else %}
-              <img src="{{ url_for('static', filename='images/placeholder.png') }}" alt="No image available" />
+              <img src="{{ url_for('static', filename='images/placeholder.png') }}"
+                  alt="No image" class="carousel-image" />
             {% endif %}
+
             <div class="card-body">
               <p><strong>Description:</strong> {{ item.description }}</p>
-              <p><strong>Location:</strong><span class="blur-text">{{ item.location }}</span></p>
+              <p><strong>Location:</strong>
+                <span class="{{ 'blur-text' if view == 'found' else '' }}">{{ item.location }}</span>
+              </p>
               <p><strong>Date:</strong> {{ item.date_found }}</p>
               <p><strong>Contact:</strong> {{ item.contact }}</p>
             </div>
+
             <div class="card-footer">
-              {% if item.received %}
-                {% if item.claimed and item.claimed_by == email %}
-                  <span class="status-indicator status-claimed">Claimed</span>
-                {% else %}
-                  {% if item.id in user_claims %}
-                    <span class="status-indicator status-claimed">Pending…</span>
+              {% if view != 'lost' %}
+                {% if item.received %}
+                  {% if item.claimed and item.claimed_by == email %}
+                    <span class="status-indicator status-claimed">Claimed</span>
                   {% else %}
-                    <button class="action-btn claim-btn"
-                            onclick="event.stopPropagation(); openClaimModal({{ item.id }});">
-                      Claim
-                    </button>
-                    <span class="status-indicator status-unclaimed">Unclaimed</span>
+                    {% if item.id in user_claims %}
+                      <span class="status-indicator status-claimed">Pending…</span>
+                    {% else %}
+                      <button class="action-btn claim-btn"
+                              onclick="event.stopPropagation(); openClaimModal({{ item.id }});">
+                        Claim
+                      </button>
+                      <span class="status-indicator status-unclaimed">Unclaimed</span>
+                    {% endif %}
                   {% endif %}
                 {% endif %}
               {% endif %}
 
-              {% if 'admin' in roles %}
+              {% if 'admin' in roles and view != 'lost' %}
                 <button class="action-btn delete-btn"
                         onclick='event.stopPropagation();
                           if(confirm("Delete this report?")) {
@@ -213,7 +332,6 @@
             </div>
           </div>
         {% endfor %}
-
       </div>
 
       <a href="{{ url_for('show_home') }}" class="back-btn">&larr; Back to Dashboard</a>
@@ -295,6 +413,7 @@
       .then(r => r.json())
       .then(d => {
         alert(d.message);
+        launchVictoryCelebration();
         closeModal();
         location.reload();
       })
@@ -304,6 +423,64 @@
 </script>
 
 <script src="{{ url_for('static', filename='claim_strength.js') }}"></script>
+<script>
+function scrollCarousel(button, direction) {
+  const wrapper = button.closest('.carousel-wrapper');
+  const carousel = wrapper.querySelector('.image-carousel');
+  const scrollAmount = carousel.clientWidth * 0.8; // scroll 80% of width
+  carousel.scrollBy({
+    left: direction * scrollAmount,
+    behavior: 'smooth'
+  });
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+<script>
+function launchVictoryCelebration() {
+  // 🎊 Emoji confetti
+  confetti({
+    particleCount: 120,
+    spread: 100,
+    origin: { y: 0.6 },
+    emojis: ['🔑', '📱', '👝'],
+    shapes: ['circle'],
+    scalar: 1.2
+  });
 
+  // 📳 Mobile vibration
+  if (navigator.vibrate) {
+    navigator.vibrate([100, 50, 100]);
+  }
+}
+</script>
+<!-- Floating Help Button -->
+<button id="helpBtn"
+  style="position:fixed; top:20px; right:20px; z-index:1000;
+         background:#3498db; color:#fff; border:none; border-radius:50%;
+         width:40px; height:40px; font-size:20px; cursor:pointer;"
+  title="Help using this page">
+  ?
+</button>
+
+<!-- Help Modal -->
+<div id="helpModal" style="display:none; position:fixed; top:0; left:0;
+     width:100%; height:100%; background:rgba(0,0,0,0.5);
+     justify-content:center; align-items:center; z-index:1001;">
+  <div style="background:#fff; padding:20px; border-radius:8px;
+              max-width:500px; width:90%; position:relative;">
+    <button onclick="document.getElementById('helpModal').style.display='none'"
+            style="position:absolute; top:8px; right:12px; font-size:18px; background:none; border:none; cursor:pointer;">
+      ✖
+    </button>
+    <h3 style="margin-top:0;">🔍 Help: {{ help_title }}</h3>
+    <p style="margin-top:10px; white-space:pre-wrap;">{{ help_text }}</p>
+  </div>
+</div>
+
+<script>
+  document.getElementById("helpBtn").onclick = function() {
+    document.getElementById("helpModal").style.display = "flex";
+  };
+</script>
 </body>
 </html>
