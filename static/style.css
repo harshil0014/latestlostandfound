@@ -20,6 +20,7 @@
 .lf-cat-books       { background:#6f42c1; }
 .lf-cat-stationary  { background:#d63384; }
 .lf-cat-accessories { background:#198754; }
+.lf-cat-personalbelongings { background:#1e90ff; }
 .lf-cat-others      { background:#fd7e14; }
 
 .lf-card {
@@ -127,6 +128,7 @@
 .bg-books       { background:#6f42c1; }
 .bg-stationary  { background:#d63384; }
 .bg-accessories { background:#198754; }
+.bg-personalbelongings { background:#1e90ff; }
 .bg-others      { background:#fd7e14; }
 
 /* ─── Fraud-check button ────────────────────────────────────────── */

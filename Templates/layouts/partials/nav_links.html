@@ -22,14 +22,43 @@
   <li class="nav-item">
     <a class="nav-link text-warning" href="{{ url_for('admin_search') }}"><i class="fas fa-search me-1"></i> Admin&nbsp;Search</a>
   </li>
-    <li class="nav-item">
+  <li class="nav-item">
     <a class="nav-link text-warning" href="{{ url_for('admin_complaints') }}">
       <i class="fas fa-exclamation-circle me-1"></i> Complaints
     </a>
   </li>
-
+  
 {% endif %}
+<li class="nav-item dropdown" style="position: relative;">
+  <a class="nav-link" href="#" id="notifToggle">
+    <i class="fas fa-bell"></i>
+  </a>
+  <ul id="notifDropdown" class="dropdown-menu" style="display: none; position: absolute; right: 0; top: 100%; z-index: 1000; background: white; width: 350px; border: 1px solid #ddd; border-radius: 6px; padding: 10px;">
+    {% if friend_requests %}
+      {% for fr in friend_requests %}
+        <li class="dropdown-item">
+          <div class="d-flex flex-column">
+            <span><strong>{{ fr.sender.email }}</strong> sent you a friend request</span>
+            <div class="mt-2">
+              <form method="POST" action="{{ url_for('respond_friend_request', req_id=fr.id, decision='accept') }}" class="d-inline">
+              <!-- Deleted the csrf token-->
+                <button class="btn btn-sm btn-success">Accept</button>
+              </form>
+              <form method="POST" action="{{ url_for('respond_friend_request', req_id=fr.id, decision='decline') }}" class="d-inline">
+                <button class="btn btn-sm btn-danger">Decline</button>
+              </form>
+            </div>
+        </div>
+        </li>
+      {% endfor %}
+    {% else %}
+      <li class="dropdown-item text-muted">No new notifications</li>
+    {% endif %}
 
+    <li class="dropdown-item">🔔 Notification 1</li>
+    <li style="border-top: 1px solid #eee; margin-top: 5px; padding-top: 5px;" class="dropdown-item text-muted">No new notifications</li>
+  </ul>
+</li>
 <li class="nav-item dropdown">
   <a class="nav-link dropdown-toggle" href="#" id="userMenuLink"
      role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -46,6 +75,11 @@
         <i class="fas fa-cog me-2"></i> Settings
       </a>
     </li>
+    <li>
+      <a class="dropdown-item" href="{{ url_for('friends') }}">
+        <i class="fas fa-user-friends me-2"></i> Friends
+      </a>
+    </li>
     <li><hr class="dropdown-divider"></li>
     <li>
       <a class="dropdown-item" href="{{ url_for('logout') }}">
@@ -55,3 +89,21 @@
   </ul>
 </li>
 
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const bell = document.getElementById("notifToggle");
+    const dropdown = document.getElementById("notifDropdown");
+
+    bell.addEventListener("click", function (e) {
+      e.preventDefault();
+      dropdown.style.display = dropdown.style.display === "none" || dropdown.style.display === "" ? "block" : "none";
+    });
+
+    // Close dropdown if clicked outside
+    document.addEventListener("click", function (event) {
+      if (!bell.contains(event.target) && !dropdown.contains(event.target)) {
+        dropdown.style.display = "none";
+      }
+    });
+  });
+</script>

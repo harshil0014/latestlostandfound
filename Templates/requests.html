@@ -88,6 +88,12 @@
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="decline-btn">❌ Decline</button>
                 </form>
+                {% if r.status == 'accepted' and r.accepted_at and (datetime.utcnow() - r.accepted_at).total_seconds() < 600 %}
+                  <form method="post" action="{{ url_for('undo_claim', req_id=r.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="decline-btn">⏪ Undo</button>
+                  </form>
+                {% endif %}
               </div>
             </li>
           {% endfor %}

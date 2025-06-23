@@ -1,4 +1,4 @@
-{% extends 'layouts/base.html' %}
+screens{% extends 'layouts/base.html' %}
 {% block title %}Dashboard · Lost & Found{% endblock %}
 
 {% block content %}
@@ -70,6 +70,15 @@
         <h6 class="fw-semibold m-0">Accessories</h6>
       </article>
     </a>
+    
+    <!-- Personal Belongings -->
+   <a href="{{ url_for('category_items',cat='personalbelongings') }}"
+    class="col-6 col-md-3 text-decoration-none">
+   <article class="lf-card lf-cat-tile lf-cat-personalbelongings text-white p-4 text-center shadow-sm h-100">
+    <i class="fa-solid fa-user fa-2x mb-3"></i>
+    <h6 class="fw-semibold m-0">Personal Belongings</h6>
+    </article>
+   </a>
 
     <!-- Others -->
     <a href="{{ url_for('category_items',cat='others') }}"
@@ -80,6 +89,41 @@
       </article>
     </a>
 
-  </div>
 </div>
+</div>
+<!-- ── ANNOUNCEMENTS SECTION ───────────────────────────────────────── -->
+<div class="container mt-5">
+  <h3 class="mb-3">📢 Announcements</h3>
+
+  <!-- Display announcements -->
+  <div class="border p-3 rounded bg-light mb-4" style="max-height:200px; overflow-y:auto;">
+    {% if announcements %}
+      <ul class="list-unstyled mb-0">
+        {% for ann in announcements %}
+          <li class="mb-2">
+            🗓️ <strong>{{ ann.created_at.strftime('%Y-%m-%d') }}</strong> – {{ ann.message }}
+            {{ ann.message }}
+            <br>
+            <small class="text-muted">
+             Posted by: {{ ann.author.email if ann.author else 'Unknown' }}
+            </small>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-muted">No announcements yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- Admin-only announcement form -->
+  {% if current_user.is_authenticated and current_user.is_admin %}
+    <form method="POST" action="{{ url_for('add_announcement') }}">
+      <div class="input-group">
+        <input type="text" name="announcement" class="form-control" placeholder="Type new announcement…" required>
+        <button type="submit" class="btn btn-primary">Post</button>
+      </div>
+    </form>
+  {% endif %}
+</div>
+
 {% endblock %}

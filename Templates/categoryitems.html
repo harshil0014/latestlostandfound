@@ -131,6 +131,7 @@
           <li><a href="{{ url_for('category_items', cat='books') }}"><i class="fas fa-book"></i> Books</a></li>
           <li><a href="{{ url_for('category_items', cat='stationary') }}"><i class="fas fa-pencil-alt"></i> Stationary</a></li>
           <li><a href="{{ url_for('category_items', cat='accessories') }}"><i class="fas fa-key"></i> Accessories</a></li>
+          <li><a href="{{ url_for('category_items', cat='personalbelongings') }}"><i class="fas fa-user"></i> Personal Belongings</a></li>
           <li><a href="{{ url_for('category_items', cat='others') }}"><i class="fas fa-th-large"></i> Others</a></li>
         </ul>
       </nav>
@@ -167,7 +168,7 @@
 
       <div class="card-grid">
         {% for item in items %}
-          <div class="card" data-id="{{ item.id }}">
+          <div class="card" data-id="{{ item.id }}" data-container="{{ (item.container_items|length > 0) | string | lower }}">
             {% if item.filename %}
               <img src="{{ url_for('static', filename='uploads/' ~ item.filename) }}" alt="{{ item.description }}" />
             {% else %}
@@ -243,7 +244,16 @@
         <div><label>Location Guess 2:</label>
           <input name="location2" type="text" required style="width:100%;">
         </div>
+        <div id="containerItemsSection" style="display:none; margin-top:10px;">
+          <label>Items inside the container:</label>
+          <div id="containerItemsInputs">
+            <input type="text" name="container_items[]" class="container-item" placeholder="Enter item">
+          </div>
+          <button type="button" onclick="addContainerItemInput()">➕</button>
+        </div>
         <br>
+        <div id="matchResult" style="display:none; margin-top:12px; padding:8px; background:#ecf0f1; border-left:4px solid #3498db; color:#2c3e50; font-weight:bold;"></div>
+        <div id="matchResult" style="display:none; padding:10px; margin-top:10px; border-radius:5px;"></div>
         <button type="submit">Submit Claim</button>
         <button type="button" onclick="closeModal()">Cancel</button>
       </form>
@@ -271,6 +281,11 @@
   function openClaimModal(reportId) {
     document.getElementById('claim_report_id').value = reportId;
     document.getElementById('claimModal').style.display = 'flex';
+    const card = document.querySelector(`.card[data-id='${reportId}']`);
+    const isContainer = card && card.getAttribute('data-container') === 'true';
+    document.getElementById('containerItemsSection').style.display = isContainer ? 'block' : 'none';
+    console.log("Card:", card);
+    console.log("data-container value:", card?.getAttribute('data-container'));
   }
 
   function closeModal() {
@@ -278,32 +293,98 @@
   }
 
   // only bind the submit handler once the DOM is fully loaded:
-  document.addEventListener('DOMContentLoaded', () => {
-    const form = document.getElementById('claimForm');
-    form.addEventListener('submit', function(e) {
-      e.preventDefault();
-      const formData = new FormData(this);
-      const reportId = formData.get('report_id');
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('claimForm');
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    const reportId = formData.get('report_id');
 
-      fetch(`/claim/${reportId}`, {
-        method: 'POST',
-        headers: {
-          'X-CSRFToken': document.querySelector("meta[name=csrf-token]").getAttribute("content")
-        },
-        body: formData
-      })
-      .then(r => r.json())
-      .then(d => {
-        alert(d.message);
-        closeModal();
-        location.reload();
-      })
-      .catch(err => console.error("Claim error:", err));
+    fetch(`/claim/${reportId}`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': document.querySelector("meta[name=csrf-token]").getAttribute("content")
+      },
+      body: formData
+    })
+    .then(r => {
+      if (!r.ok) return r.json().then(err => Promise.reject(err));
+      return r.json();
+    })
+    .then(d => {
+  const resultBox = document.getElementById('matchResult');
+  resultBox.style.display = 'block';
+
+  if (d.match_score !== null && d.match_score !== undefined) {
+    // ✅ Show success styling
+    resultBox.textContent = `✅ Claim submitted! Container match score: ${d.match_score}%`;
+    resultBox.style.background = '#d4edda';
+    resultBox.style.borderLeft = '4px solid #28a745';
+    resultBox.style.color = '#155724';
+
+    // Auto-close after 1.5s
+    setTimeout(() => {
+      closeModal();
+      location.reload();
+    }, 1500);
+
+  } else if (d.message && d.message.includes("too low")) {
+    // ❌ Show error styling
+    resultBox.textContent = `❌ ${d.message}`;
+    resultBox.style.background = '#f8d7da';
+    resultBox.style.borderLeft = '4px solid #c0392b';
+    resultBox.style.color = '#721c24';
+
+    // Do NOT auto-close; user should revise input
+
+  } else {
+    // Generic fallback (e.g. for non-container claims)
+    resultBox.textContent = d.message || "Claim submitted!";
+    resultBox.style.background = '#d4edda';
+    resultBox.style.borderLeft = '4px solid #28a745';
+    resultBox.style.color = '#155724';
+
+    setTimeout(() => {
+      closeModal();
+      location.reload();
+    }, 1500);
+  }
+})
+
+    .catch(err => {
+      const resultBox = document.getElementById('matchResult');
+      resultBox.style.display = 'block';
+      resultBox.style.background = '#fdecea';
+      resultBox.style.borderLeft = '4px solid #e74c3c';
+      resultBox.style.color = '#e74c3c';
+      resultBox.textContent = err.message || "Claim failed.";
     });
   });
+});
 </script>
 
 <script src="{{ url_for('static', filename='claim_strength.js') }}"></script>
-
+<script>
+function addContainerItemInput() {
+  const container = document.getElementById('containerItemsInputs');
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.name = 'container_items[]';
+  input.className = 'container-item';
+  input.placeholder = 'Enter item';
+  container.appendChild(document.createElement('br'));
+  container.appendChild(input);
+}
+</script>
+<script>
+document.getElementById('add-more-items').addEventListener('click', function () {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.name = 'container_items[]';
+  input.className = 'form-control mt-1';
+  input.placeholder = 'Another item';
+  document.getElementById('container-items-list').appendChild(input);
+});
+</script>
 </body>
 </html>

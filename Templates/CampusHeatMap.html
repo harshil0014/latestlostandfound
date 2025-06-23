@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Campus Heatmap - Mark Your Location</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <!-- Heatmap.js and Leaflet plugin -->
+  <script src="https://unpkg.com/heatmap.js@2.0.5"></script>
+  <script src="https://unpkg.com/leaflet-heatmap/leaflet-heatmap.js"></script>
+
+  <style>
+    #map {
+      height: 90vh;
+      width: 100%;
+    }
+    #info {
+      padding: 10px;
+      font-family: Arial, sans-serif;
+      background: #f8f8f8;
+      border-top: 1px solid #ccc;
+    }
+    #info input {
+      margin: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="map"></div>
+
+  <div id="info">
+    <label>Latitude:</label>
+    <input type="text" id="lat" readonly required>
+    <label>Longitude:</label>
+    <input type="text" id="lng" readonly required>
+    <button onclick="goBackToForm()">Use this location</button>
+  </div>
+
+  <script>
+    let map, marker;
+
+    // Create the map centered at Somaiya
+    map = L.map('map').setView([19.0735, 72.8992], 17);
+
+    // OpenStreetMap tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Load heatmap data from server
+    fetch("/heatmap-data")
+      .then(res => res.json())
+      .then(data => {
+        const heatmapData = {
+          max: 5,
+          data: data
+        };
+
+        const cfg = {
+          radius: 20,
+          maxOpacity: 0.8,
+          scaleRadius: true,
+          useLocalExtrema: false,
+          latField: 'lat',
+          lngField: 'lng',
+          valueField: 'value'
+        };
+
+        const heatmapLayer = new HeatmapOverlay(cfg);
+        map.addLayer(heatmapLayer);
+        heatmapLayer.setData(heatmapData);
+      });
+
+    // Click to place marker and save lat/lng
+    map.on('click', function(e) {
+      const lat = e.latlng.lat.toFixed(6);
+      const lng = e.latlng.lng.toFixed(6);
+
+      if (marker) {
+        marker.setLatLng(e.latlng);
+      } else {
+        marker = L.marker(e.latlng).addTo(map).bindPopup("Your Location").openPopup();
+      }
+
+      document.getElementById("lat").value = lat;
+      document.getElementById("lng").value = lng;
+
+      sessionStorage.setItem('selectedLat', lat);
+      sessionStorage.setItem('selectedLng', lng);
+    });
+
+    function goBackToForm() {
+      window.location.href = "/report-found";  // Update if your report route differs
+    }
+  </script>
+</body>
+</html>

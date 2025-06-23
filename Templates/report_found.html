@@ -176,7 +176,9 @@
           <option value="Bhaskaracharya">Bhaskaracharya</option>
           <option value="Engineering Canteen">Engineering Canteen </option>
           <option value="MBA canteen">MBA canteen</option>
-        </select>
+          <option value="Others">Others</option>
+          </select>
+          <input type="text" id="locationField" name="location" style="display:none;" readonly />
 
         <!-- Aryabhatt Floors and Rooms Container -->
         <div id="aryabhatt-details-container" class="conditional-dropdown-container" style="display: none;">
@@ -476,6 +478,25 @@
 @keyframes spin{to{transform:rotate(360deg)}}
 </style>
 <script src="{{ url_for('static', filename='claim_strength.js') }}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const locationDropdown = document.getElementById("location");
+    locationDropdown.addEventListener("change", function () {
+        if (locationDropdown.value === "Others") {
+            window.location.href = "/campus-map";
+        }
+    });
+});
+</script>
+<script>
+window.addEventListener('DOMContentLoaded', function () {
+  const lat = sessionStorage.getItem('selectedLat');
+  const lng = sessionStorage.getItem('selectedLng');
+  if (lat && lng) {
+    document.getElementById('locationField').value = `Lat: ${lat}, Lng: ${lng}`;
+  }
+});
+</script>
 
 </body>
 </html>

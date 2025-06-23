@@ -2,9 +2,6 @@ import os
 from dotenv import load_dotenv
 from datetime import date,timedelta
 from datetime import datetime
-
-
-
 from functools import wraps
 import numpy as np
 import pickle
@@ -18,8 +15,6 @@ from flask_login import (
     current_user
 )
 from flask_login import UserMixin
-
-
 from werkzeug.security import check_password_hash
 
 
@@ -55,6 +50,17 @@ import bleach
 load_dotenv()
 
 app = Flask(__name__)
+from flask_caching import Cache
+
+# Redis cache config
+app.config['CACHE_TYPE'] = 'RedisCache'
+app.config['CACHE_REDIS_HOST'] = 'localhost'  # or Redis server IP
+app.config['CACHE_REDIS_PORT'] = 6379
+app.config['CACHE_REDIS_DB'] = 0
+app.config['CACHE_DEFAULT_TIMEOUT'] = 300  # seconds
+
+cache = Cache(app)
+
 
 login_manager = LoginManager()
 login_manager.login_view = 'login'
@@ -121,8 +127,7 @@ os.makedirs(app.config['QR_FOLDER'], exist_ok=True)
 
 
 csrf = CSRFProtect(app)
-db = SQLAlchemy(app)
-migrate = Migrate(app, db)
+
 
 
 from vector_store import VectorStore
@@ -193,6 +198,11 @@ def generate_qr(data: str) -> str:
     return rel_path
      # something we can embed as /static/qr/...
 
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+
+
+
 
 # ─── Models ─────────────────────────────────────────────────────────────────
 class User(UserMixin, db.Model):
@@ -204,6 +214,14 @@ class User(UserMixin, db.Model):
     def is_admin(self):
         return 'admin' in self.roles.split(',')
 
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)  # Unique ID for the notification
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Who receives it
+    message = db.Column(db.Text, nullable=False)  # Notification content
+    is_read = db.Column(db.Boolean, default=False)  # Whether user read it
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)  # Time it was created
+    user = db.relationship('User', backref='notifications')  # Access via user.notifications
+   
 
 class Report(db.Model):
     id          = db.Column(db.Integer, primary_key=True)
@@ -221,6 +239,21 @@ class Report(db.Model):
     img_emb = db.Column(db.PickleType)  # stores the image vector
     priority_score = db.Column(db.Float, default=0.0)
     qr_code      = db.Column(db.String, nullable=True)   # holds 'qr/<uuid>.png'
+    latitude = db.Column(db.Float, nullable=True)
+    longitude = db.Column(db.Float, nullable=True)
+    dummy = db.Column(db.String(10))
+
+class FriendRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    receiver_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    status = db.Column(db.String(20), default='pending')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # FIX: Add post_update=True to avoid circular dependency
+    sender = db.relationship('User', foreign_keys=[sender_id], backref='sent_requests')
+    receiver = db.relationship('User', foreign_keys=[receiver_id], backref='received_requests', post_update=True)
+
 
 
 
@@ -246,6 +279,9 @@ class ClaimRequest(db.Model):
     ocr_text       = db.Column(db.Text, nullable=True)
     image_features = db.Column(db.PickleType, nullable=True)
     proof_score    = db.Column(db.Float, nullable=True)
+    accepted_at = db.Column(db.DateTime, nullable=True)  # ⏪ For 10-min Undo feature
+    
+
 
 
 
@@ -269,15 +305,32 @@ class Complaint(db.Model):
     proof_filename = db.Column(db.String(255), nullable=True)
     quality_score = db.Column(db.Float, default=0.0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user = db.relationship('User', backref='complaints', lazy=True)
+
     proof_type     = db.Column(db.String(20), nullable=True)
     ocr_text       = db.Column(db.Text, nullable=True)
     image_features = db.Column(db.PickleType, nullable=True)
     proof_score    = db.Column(db.Float, nullable=True)
     status = db.Column(db.String(20), nullable=False, default='pending')
+    user = db.relationship('User', backref='complaints', lazy=True)
+ 
+class Announcement(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    message = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow) 
+    author_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
 
-
-
+    author = db.relationship('User', backref='announcements')
+class ContainerItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    report_id = db.Column(db.Integer, db.ForeignKey('report.id'), nullable=False)
+    item_name = db.Column(db.String(100), nullable=False)
+    report = db.relationship('Report', backref='container_items')
+    
+class ClaimedContainerItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    claim_id = db.Column(db.Integer, db.ForeignKey('claim_request.id'), nullable=False)
+    item_name = db.Column(db.String(100), nullable=False)
+    claim = db.relationship('ClaimRequest', backref='container_claims')
 
 
 # ─── Forms ───────────────────────────────────────────────────────────────────
@@ -297,6 +350,7 @@ class ReportForm(FlaskForm):
         ('accessories','Accessories'),
         ('books','Books'),
         ('stationary','Stationary'),
+         ('personalbelongings','Personal Belongings'),
         ('others','Others')
     ])
     contact = TelField('Contact', validators=[
@@ -317,6 +371,10 @@ class ComplaintForm(FlaskForm):
     )
     proof = FileField("Proof (image / PDF)")
     submit = SubmitField("Submit Complaint")
+
+class AnnouncementForm(FlaskForm):
+    message = TextAreaField("Announcement", validators=[DataRequired(), Length(min=5, max=500)])
+    submit = SubmitField("Post")
 
 
 # ─── Context Processor ──────────────────────────────────────────────────────
@@ -358,6 +416,13 @@ def allow_reports():
 def accept_report(report_id):
     rpt = Report.query.get_or_404(report_id)
     rpt.received = True
+    # Parse the JSON sent from frontend (contains items if any)
+    data = request.get_json()
+    if data:
+        items = data.get('items', [])
+        for item in items:
+            if item.strip():  # Avoid empty strings
+                db.session.add(ContainerItem(report_id=report_id, item_name=item.strip()))
     db.session.commit()
     return ('', 204)
 
@@ -439,9 +504,6 @@ def complain(report_id):
 
 
 # ─── Routes ─────────────────────────────────────────────────────────────────
-
-
-
 
 
 @app.route('/logout')
@@ -543,6 +605,47 @@ def report_found():
         return redirect(url_for('category_items', cat=form.category.data))
     return render_template('report_found.html', form=form)
 
+@app.route('/campus-map')
+@csrf.exempt
+@login_required
+def campus_map():
+    return render_template('CampusHeatMap.html')
+@app.route('/heatmap-data')
+@login_required
+def heatmap_data():
+    # Get all approved reports with coordinates
+    reports = Report.query.filter(
+        Report.received == True,
+        Report.latitude.isnot(None),
+        Report.longitude.isnot(None)
+    ).all()
+
+    data = [
+        {
+            "lat": float(r.latitude),
+            "lng": float(r.longitude),
+            "value": 1
+        }
+        for r in reports
+    ]
+    return jsonify(data)
+@app.route('/submit-location', methods=['POST'])
+@login_required
+def submit_location():
+    lat = request.form.get('lat')
+    lng = request.form.get('lng')
+
+    if not lat or not lng:
+        flash("Please select a valid location from the map.", "danger")
+        return redirect(url_for('campus_map'))
+
+    session['selectedLat'] = lat
+    session['selectedLng'] = lng
+
+    # Redirect to the report form (which will auto-fill lat/lng from sessionStorage)
+    return redirect(url_for('report_found'))
+
+
 from sqlalchemy import or_
 
 @app.route('/found-items')
@@ -554,6 +657,10 @@ def found_items():
           ClaimRequest.status == 'requires proof'
         )
     ).all()
+    for claim in accepted:
+        user = User.query.filter_by(email=claim.user_email).first()
+        if user:
+            claim.user_id = user.id
     return render_template('itemsfound.html', accepted=accepted)
 
 
@@ -604,29 +711,52 @@ def claim_report(report_id):
         user_email=current_user.email,
         report_id=report_id
     ).first()
-    
-    
-    if not exists:
-            reason = request.form.get('description', '')
-            q_score = compute_quality_score(reason)
-            report = Report.query.get(report_id)
-            delay = (datetime.utcnow() - report.timestamp).total_seconds()
 
-
-            cr = ClaimRequest(
-                    report_id   = report_id,
-                    user_email  = current_user.email,
-                    description      = reason,
-                    quality_score = q_score,    # <-- NEW
-                    created_at     = datetime.utcnow(),
-                    delay_seconds  = delay
-                )
-
-            db.session.add(cr)
-            db.session.commit()
-            return jsonify(message='Your claim request has been sent!')
-    else:
+    if exists:
         return jsonify(message='Already requested.')
+
+    reason = request.form.get('description', '')
+    q_score = compute_quality_score(reason)
+    report = Report.query.get_or_404(report_id)
+    delay = (datetime.utcnow() - report.timestamp).total_seconds()
+
+    # ---- NEW: Check container similarity if applicable ----
+    container_match_score = None
+    if report.container_items:  # Admin has added container items
+        admin_items = [item.item_name for item in report.container_items]
+        user_items = request.form.getlist('container_items[]')
+
+        if user_items:
+            vec_admin = get_text_vec(", ".join(admin_items))
+            vec_user = get_text_vec(", ".join(user_items))
+            container_match_score = cosine_sim(vec_admin, vec_user)
+
+            if container_match_score < 0.7:
+                return jsonify(message=f"Container item match too low ({container_match_score:.2f}). Claim denied."), 400
+
+    # Create claim request
+    cr = ClaimRequest(
+        report_id=report_id,
+        user_email=current_user.email,
+        description=reason,
+        quality_score=q_score,
+        created_at=datetime.utcnow(),
+        delay_seconds=delay
+    )
+    db.session.add(cr)
+    db.session.flush()  # Get the claim ID before committing
+
+    # Save user container items
+    user_items = request.form.getlist('container_items[]')
+    for item in user_items:
+        if item.strip():
+            db.session.add(ClaimedContainerItem(claim_id=cr.id, item_name=item.strip()))
+
+    db.session.commit()
+
+    msg = "Claim submitted!"
+    return jsonify(message=msg, match_score=round(container_match_score * 100, 2) if container_match_score is not None else None)
+
 
 # AJAX‐style Delete → 204 No Content
 @app.route('/delete-report/<int:report_id>', methods=['POST'])
@@ -704,6 +834,7 @@ def decide_claim(req_id, decision):
     cr = ClaimRequest.query.get_or_404(req_id)
     if decision == 'accept':
         cr.status = 'accepted'
+        cr.accepted_at = datetime.utcnow()  # ← This stores the accept time
         rpt = cr.report
         rpt.claimed    = True
         rpt.claimed_by = cr.user_email
@@ -711,7 +842,14 @@ def decide_claim(req_id, decision):
         qr_rel_path = generate_qr(f"Found item #{rpt.id} claimed by {cr.user_email}")
         rpt.qr_code = qr_rel_path         # store path on the Report
         # -----------------------------------------------------
-
+# ✅ Notify the user who reported the item
+    reporter_user = User.query.filter_by(email=rpt.email).first()
+    if reporter_user:
+        notif = Notification(
+            user_id=reporter_user.id,
+            message="🙏 Thank you! Your help led to this item being returned to its rightful owner."
+        )
+        db.session.add(notif)
         others = ClaimRequest.query.filter(
             ClaimRequest.report_id==cr.report_id,
             ClaimRequest.id!=req_id
@@ -725,6 +863,13 @@ def decide_claim(req_id, decision):
         db.session.commit()
         flash('Claim declined.', 'info')
     return redirect(url_for('view_requests'))
+@cache.cached(timeout=300, key_prefix='all_claim_requests')
+def get_all_claim_requests():
+    return ClaimRequest.query.all()
+
+@cache.cached(timeout=300, key_prefix='all_complaints')
+def get_all_complaints():
+    return Complaint.query.order_by(Complaint.created_at.desc()).all()
 
 # New: “My Claims” for Bob (and any user)
 @app.route('/my-claims')
@@ -746,22 +891,99 @@ def admin_search():
     return render_template('admin_search.html',
         show_sidebar=False,   #  ← hide nav
         show_brand=False)
-
+@cache.cached(timeout=300, key_prefix='homepage_stats')
+def get_homepage_stats():
+    return {
+        'found_count': Report.query.filter_by(received=True).count(),
+        'claims_total': ClaimRequest.query.count(),
+        'claims_resolved': ClaimRequest.query.filter_by(status='accepted').count()
+    }
 # ── Home / dashboard ─────────────────────────────────────────
 @app.route('/')
 @login_required
 def show_home():
-    found_count      = Report.query.filter_by(received=True).count()
-    claims_total     = ClaimRequest.query.count()
-    claims_resolved  = ClaimRequest.query.filter_by(status='accepted').count()
+    found_count = Report.query.filter_by(received=True).count()
+    claims_total = ClaimRequest.query.count()
+    claims_resolved = ClaimRequest.query.filter_by(status='accepted').count()
+
+    # ✅ NEW: Get pending friend requests received by current user
+    friend_requests = FriendRequest.query.filter_by(
+        receiver_id=current_user.id,
+        status='pending'
+    ).all()
+    
+    # Get the 3 most recent announcements
+    recent_announcements = Announcement.query.order_by(Announcement.created_at.desc()).limit(3).all()
 
     return render_template(
         'home.html',
-        found_count      = found_count,
-        claims_total     = claims_total,
-        claims_resolved  = claims_resolved
+        found_count=found_count,
+        claims_total=claims_total,
+        claims_resolved=claims_resolved,
+        friend_requests=friend_requests,
+        announcements=recent_announcements  # Now using the queried data
     )
+@app.route('/announcements', methods=['GET', 'POST'])
+@login_required
+@csrf.exempt
+def announcements():
+    form = AnnouncementForm()
+    # Fetch all announcements for the dedicated announcements page
+    all_announcements_for_page = Announcement.query.order_by(Announcement.created_at.desc()).all()
 
+    if current_user.is_admin and form.validate_on_submit():
+        new_announcement = Announcement(
+            message=form.message.data,
+            author=current_user
+        )
+        db.session.add(new_announcement)
+        db.session.commit()
+        flash("Announcement posted successfully.", "success")
+        return redirect(url_for('announcements'))
+
+    return render_template('announcements.html', form=form, announcements=all_announcements_for_page)
+@app.route('/add_announcement', methods=['POST'])
+@csrf.exempt
+@admin_only
+def add_announcement():
+    message = request.form.get("announcement", "").strip()
+    if not message:
+        flash("Message cannot be empty", "danger")
+        return redirect(url_for('show_home'))
+
+    new_announcement = Announcement(
+        message=message,
+        author_id=current_user.id
+    )
+    db.session.add(new_announcement)
+    db.session.commit()
+
+    flash("Announcement posted successfully.", "success")
+    return redirect(url_for('show_home'))
+@app.route('/undo-claim/<int:req_id>', methods=['POST'])
+@admin_only
+def undo_claim(req_id):
+    cr = ClaimRequest.query.get_or_404(req_id)
+
+    if cr.status != 'accepted' or not cr.accepted_at:
+        flash("Claim is not in an accepted state.", "warning")
+        return redirect(url_for('view_requests'))
+
+    # Check if within 10-minute window
+    if datetime.utcnow() - cr.accepted_at > timedelta(minutes=10):
+        flash("Undo window has expired.", "danger")
+        return redirect(url_for('view_requests'))
+
+    # Revert status
+    cr.status = 'pending'
+    cr.accepted_at = None
+    cr.report.claimed = False
+    cr.report.claimed_by = None
+    cr.report.qr_code = None  # remove generated QR
+
+    db.session.commit()
+    flash("Undo successful. Claim is now pending again.", "info")
+    return redirect(url_for('view_requests'))
 
 
 # ─── Init & Seed ────────────────────────────────────────────────────────────
@@ -792,6 +1014,8 @@ with app.app_context():
             roles=''
         ))
     db.session.commit()
+    print(Notification.__table__)
+
 vs = VectorStore()
 
 @csrf.exempt
@@ -953,6 +1177,7 @@ def upload_proof(claim_id):
 
     # 4b. If it’s an image → feature‐vector matching
     else:  # proof_type == 'image'
+        path = os.path.join(app.config["UPLOAD_FOLDER"], "complaints", proof_filename)
         vec = get_image_vec(path)
         claim.image_features = vec
         report_vec = claim.report.img_emb or []
@@ -983,6 +1208,92 @@ def decide_complaint(comp_id, decision):
     db.session.commit()
     return redirect(url_for("admin_complaints"))
 
+@app.route('/send-friend-request', methods=['POST'])
+@csrf.exempt
+@login_required
+def send_friend_request():
+    email = request.form.get('friendEmail')
+    receiver = User.query.filter_by(email=email).first()
+
+    if not receiver:
+        flash('User not found.', 'danger')
+        return redirect(url_for('friends'))
+
+    if receiver.id == current_user.id:
+        flash('You cannot send a request to yourself.', 'warning')
+        return redirect(url_for('friends'))
+
+    existing = FriendRequest.query.filter_by(sender_id=current_user.id, receiver_id=receiver.id).first()
+    if existing:
+        flash('Friend request already sent.', 'info')
+        return redirect(url_for('friends'))
+
+    fr = FriendRequest(sender_id=current_user.id, receiver_id=receiver.id)
+    db.session.add(fr)
+    db.session.commit()
+
+    flash('Friend request sent!', 'success')
+    return redirect(url_for('friends'))
+
+@app.route('/friend-request/<int:req_id>/<string:decision>', methods=['POST'])
+@csrf.exempt
+@login_required
+def respond_friend_request(req_id, decision):
+    fr = FriendRequest.query.get_or_404(req_id)
+
+    # Ensure only the receiver can respond
+    if fr.receiver_id != current_user.id:
+        abort(403)
+
+    if decision == 'accept':
+        fr.status = 'accepted'
+        flash('Friend request accepted.', 'success')
+    else:
+        fr.status = 'declined'
+        flash('Friend request declined.', 'info')
+
+    db.session.commit()
+    return redirect(url_for('show_home'))
+@app.route('/friends')
+@csrf.exempt
+@login_required
+def friends():
+    # All users you sent a request to AND it was accepted
+    sent = FriendRequest.query.filter_by(sender_id=current_user.id, status='accepted').all()
+    received = FriendRequest.query.filter_by(receiver_id=current_user.id, status='accepted').all()
+
+    # Build a combined list of friend User objects
+    friends_list = [fr.receiver for fr in sent] + [fr.sender for fr in received]
+
+    return render_template('Friends.html', friends_list=friends_list)
+@app.route('/remove-friend', methods=['POST'])
+@csrf.exempt
+@login_required
+def remove_friend():
+    friend_id = request.form.get('friend_id')
+
+    if not friend_id:
+        flash("No friend ID provided.", "danger")
+        return redirect(url_for('friends'))
+
+    # Remove both directions of the friend relationship
+    FriendRequest.query.filter(
+        ((FriendRequest.sender_id == current_user.id) & (FriendRequest.receiver_id == friend_id)) |
+        ((FriendRequest.receiver_id == current_user.id) & (FriendRequest.sender_id == friend_id)),
+        FriendRequest.status == 'accepted'
+    ).delete(synchronize_session=False)
+
+    db.session.commit()
+    flash("Friend removed successfully.", "success")
+    return redirect(url_for('friends'))
+@app.route('/notifications/friend-requests')
+@login_required
+def get_friend_requests():
+    requests = FriendRequest.query.filter_by(
+        receiver_id=current_user.id,
+        status='pending'
+    ).all()
+    return render_template('partials/_friend_requests_dropdown.html', friend_requests=requests)
+
 if __name__ == '__main__':
     app.run(debug=True)
-

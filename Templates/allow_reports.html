@@ -98,13 +98,7 @@
           </div>
           <div class="card-footer">
             <button class="action-btn accept-btn"
-              onclick='event.stopPropagation();
-                       if(confirm("Approve this report?")) {
-                         fetch("{{ url_for("accept_report", report_id=item.id) }}", {
-                           method:"POST",
-                           headers:{"X-CSRFToken": document.querySelector("meta[name=csrf-token]").getAttribute("content")}
-                         }).then(()=>location.reload());
-                       }'>
+                    onclick='event.stopPropagation(); openContainerPrompt({{ item.id }});'>
               ✅ Accept
             </button>
             <button class="action-btn delete-btn"
@@ -125,6 +119,70 @@
     </div>
     <br>
     <a href="{{ url_for('show_home') }}">&larr; Back to Dashboard</a>
+    <!-- Modal 1: Ask if it's a container -->
+    <div id="containerPrompt" style="display:none; background:white; padding:20px; border-radius:8px; position:fixed; top:30%; left:30%; width:40%; z-index:1000; box-shadow: 0 0 10px rgba(0,0,0,0.2)">
+      <p>Is this item a container?</p>
+      <button onclick="handleContainerChoice(true)">Yes</button>
+      <button onclick="handleContainerChoice(false)">No</button>
+    </div>
+    <!-- Modal 2: If yes, list the items -->
+    <div id="itemListModal" style="display:none; background:white; padding:20px; border-radius:8px; position:fixed; top:20%; left:30%; width:40%; z-index:1000; box-shadow: 0 0 10px rgba(0,0,0,0.2)">
+      <h3>List the items inside</h3>
+      <div id="itemsContainer">
+        <input type="text" class="item-input" placeholder="Enter item">
+      </div>
+      <button onclick="addNewItemInput()">➕</button>
+      <br><br>
+      <button onclick="submitItems()">Submit</button>
+    </div>
   </div>
+  <script>
+let currentReportId = null;
+
+function openContainerPrompt(reportId) {
+  currentReportId = reportId;
+  document.getElementById('containerPrompt').style.display = 'block';
+}
+
+function handleContainerChoice(isContainer) {
+  document.getElementById('containerPrompt').style.display = 'none';
+  if (isContainer) {
+    document.getElementById('itemListModal').style.display = 'block';
+  } else {
+    fetch(`/allow-report/${currentReportId}/accept`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector("meta[name=csrf-token]").getAttribute("content")
+      },
+      body: JSON.stringify({ items: [] })
+    }).then(() => location.reload());
+  }
+}
+
+function addNewItemInput() {
+  const container = document.getElementById('itemsContainer');
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'item-input';
+  input.placeholder = 'Enter item';
+  container.appendChild(document.createElement('br'));
+  container.appendChild(input);
+}
+
+function submitItems() {
+  const inputs = document.querySelectorAll('.item-input');
+  const items = Array.from(inputs).map(input => input.value).filter(Boolean);
+
+  fetch(`/allow-report/${currentReportId}/accept`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': document.querySelector("meta[name=csrf-token]").getAttribute("content")
+    },
+    body: JSON.stringify({ items })
+  }).then(() => location.reload());
+}
+</script>
 </body>
 </html>
