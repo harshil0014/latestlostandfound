@@ -23,10 +23,34 @@
     .group{margin-bottom:24px;}
     .group h2{color:var(--primary-blue);}
     ul{list-style:none;padding:0;}
-    li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;}
+    li{display:flex;justify-content:space-between;align-items: flex-start;padding:8px 0;border-bottom:1px solid #eee;}
     form{display:inline;}
     .accept-btn{background:#28a745;color:#fff;padding:6px 12px;border:none;border-radius:4px;}
     .decline-btn{background:var(--accent-red);color:#fff;padding:6px 12px;border:none;border-radius:4px;}
+    .request-info {
+      flex: 1;              /* take up all available width */
+      padding-right: 16px;  /* space between info and buttons */
+    }
+    .request-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;             /* space between the two buttons */
+    }
+    .in-person-alert-box { /* New style for the alert div inside li */
+      background-color: #fff3cd; /* Light yellow background */
+      border: 1px solid #ffc107; /* Yellow border */
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 5px;
+      font-weight: bold;
+      color: #664d03;
+      width: 100%; /* Make it span full width of the li */
+    }
+    .in-person-pending {
+      background-color: #fff3cd; /* Light yellow background */
+      border-left: 5px solid #ffc107; /* Yellow border */
+    }
+
   </style>
 </head>
 <body>
@@ -48,10 +72,11 @@
     {% endif %}
     {% for rep_id, reqs in grouped_requests.items() %}
       <div class="group">
-        <h2>Item #{{ rep_id }}</h2>
+        <h2>Item #{{ rep_id }} <small class="text-muted">({{ reqs[0].report.description if reqs[0].report else 'N/A' }})</small></h2>
         <ul>
           {% for r in reqs %}
             <li>
+              <div class="request-info">
               <span>
                 {{ r.user_email }} – 
 
@@ -61,6 +86,7 @@
                           {% elif r.match_percentage >= 50 %}orange
                           {% else %}red{% endif %};">
                   {{ r.match_percentage }}%
+
                 </span>
 
                 <!-- Proof Score, if available -->
@@ -73,22 +99,68 @@
                     {{ (r.proof_score * 100) | round(1) }}%
                   </span>
                 {% endif %}
+                  &nbsp;|&nbsp;
+                {% if r.proof_filename %}
+                  <a href="{{ url_for('static',
+                        filename='uploads/claims/' ~ r.proof_filename) }}"
+                    target="_blank">See Proof</a>
+                {% else %}
+                  Not uploaded
+                {% endif %}
+
               </span>
 
                 
+
               </span>
-              <div>
-                <form method="post"
-                      action="{{ url_for('decide_claim', req_id=r.id, decision='accept') }}">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="accept-btn">✔️ Accept</button>
-                </form>
-                <form method="post"
-                      action="{{ url_for('decide_claim', req_id=r.id, decision='decline') }}">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="decline-btn">❌ Decline</button>
-                </form>
+
+              <p><strong>Description:</strong> {{ r.description }}</p>
+              <p><strong>Location Guess 1:</strong> {{ r.location1 or '–' }}</p>
+              <p><strong>Location Guess 2:</strong> {{ r.location2 or '–' }}</p>
+              <p><strong>Waiting:</strong> {{ r.wait_time }}</p>
+
+              <div class="request-actions">
+                {% if r.status.endswith('_pending') %}
+                  <!-- Undo button while decision is pending -->
+                  <form method="post"
+                        action="{{ url_for('undo_claim_decision', req_id=r.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="decline-btn">↩️ Undo</button>
+                  </form>
+                {% elif r.status == 'pending' and not r.in_person_required %}
+                  <!-- Original accept/decline -->
+                  <form method="post"
+                        action="{{ url_for('decide_claim', req_id=r.id, decision='accept') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="accept-btn">✔️ Accept</button>
+                  </form>
+                  <form method="post"
+                        action="{{ url_for('decide_claim', req_id=r.id, decision='decline') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="decline-btn">❌ Decline</button>
+                  </form>
+                  <button class="action-btn"
+                          onclick="openInPersonModal({{ r.id }});">
+                    📋 Ask In-Person
+                  </button>
+                {% elif r.status == 'in_person_pending' %}
+                  <span class="badge bg-warning text-dark">In-Person Pending</span>
+                  <button class="accept-btn"
+                          onclick="fetch('/requests/{{ r.id }}/verify-in-person', {
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': document.querySelector('meta[name=\'csrf-token\']').getAttribute('content') }
+                          }).then(() => location.reload());">
+                    ✅ Mark Verified
+                  </button>
+                  <small class="text-muted">
+                    Due: {{ r.in_person_deadline.strftime('%Y-%m-%d') if r.in_person_deadline else 'N/A' }}
+                  </small>
+                {% else %}
+                  <!-- Finalized status (accepted/declined/in_person_verified) -->
+                  <span class="badge bg-info text-dark">{{ r.status.title() }}</span>
+                {% endif %}
               </div>
+
             </li>
           {% endfor %}
         </ul>
@@ -96,5 +168,69 @@
     {% endfor %}
     <p><a href="{{ url_for('show_home') }}">← Back to Dashboard</a></p>
   </div>
+  <meta name="csrf-token" content="{{ csrf_token() }}"> {# Add this line #}
+
+  <!-- In-Person Verification Modal -->
+  <div class="modal fade" id="inPersonModal" tabindex="-1" aria-labelledby="inPersonModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form id="inPersonForm">
+          <div class="modal-header">
+            <h5 class="modal-title" id="inPersonModalLabel">Request In-Person Verification</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="modalClaimId">
+            <div class="mb-3">
+              <label for="inPersonDeadline" class="form-label">Deadline:</label>
+              <input type="date" class="form-control" id="inPersonDeadline" required>
+            </div>
+            <div class="mb-3">
+              <label for="inPersonNotes" class="form-label">Notes for User:</label>
+              <textarea class="form-control" id="inPersonNotes" rows="3" placeholder="e.g., Bring original receipt or ID."></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="submit" class="btn btn-primary">Submit Request</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS (for modal functionality) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    let currentClaimId = null;
+
+    function openInPersonModal(claimId) {
+      currentClaimId = claimId;
+      document.getElementById('modalClaimId').value = claimId;
+      const inPersonModal = new bootstrap.Modal(document.getElementById('inPersonModal'));
+      inPersonModal.show();
+    }
+
+    document.getElementById('inPersonForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const claimId = document.getElementById('modalClaimId').value;
+      const deadline = document.getElementById('inPersonDeadline').value;
+      const notes = document.getElementById('inPersonNotes').value;
+
+      const response = await fetch(`/requests/${claimId}/ask-in-person`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector("meta[name='csrf-token']").getAttribute("content")
+        },
+        body: JSON.stringify({ deadline, notes })
+      });
+      const data = await response.json();
+      if (data.success) {
+        location.reload(); // Reload the page to reflect changes
+      }
+    });
+  </script>
 </body>
 </html>

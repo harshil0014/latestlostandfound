@@ -11,6 +11,12 @@
 <li class="nav-item">
   <a class="nav-link" href="{{ url_for('my_claims') }}"><i class="fas fa-clipboard-check me-1"></i> My&nbsp;Claims</a>
 </li>
+<li class="nav-item">
+  <a class="nav-link" href="{{ url_for('report_lost') }}">
+    <i class="fas fa-search me-1"></i> Report&nbsp;Lost
+  </a>
+</li>
+
 
 {% if current_user.is_admin %}
   <li class="nav-item">
@@ -23,12 +29,55 @@
     <a class="nav-link text-warning" href="{{ url_for('admin_search') }}"><i class="fas fa-search me-1"></i> Admin&nbsp;Search</a>
   </li>
     <li class="nav-item">
-    <a class="nav-link text-warning" href="{{ url_for('admin_complaints') }}">
-      <i class="fas fa-exclamation-circle me-1"></i> Complaints
+    <a class="nav-link text-warning" href="{{ url_for('admin_bp.admin_complaints') }}">
+      <i class="fas fa-exclamation-circle me-1"></i>Complaints
+    </a>
+  </li>
+    <li class="nav-item">
+    <a class="nav-link text-warning" href="{{ url_for('lost_items') }}">
+      <i class="fas fa-search me-1"></i> Lost&nbsp;Items
+    </a>
+  </li>
+    <li class="nav-item">
+    <a class="nav-link text-warning" href="{{ url_for('allow_lost_reports') }}">
+      <i class="fas fa-hourglass-half me-1"></i> Allow&nbsp;Lost&nbsp;Reports
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link text-warning" href="{{ url_for('post_announcement') }}">
+      <i class="fas fa-bullhorn me-1"></i> Post&nbsp;Announcement
     </a>
   </li>
 
+
+
+
 {% endif %}
+<li class="nav-item dropdown">
+  <a class="nav-link position-relative" href="#" role="button" data-bs-toggle="dropdown"
+     aria-expanded="false" id="notifBell">
+    <i class="fas fa-bell"></i>
+    {% if unread_count > 0 %}
+      <span id="notif-badge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+        {{ unread_count }}
+      </span>
+
+    {% endif %}
+  </a>
+  <ul class="dropdown-menu dropdown-menu-end p-2" aria-labelledby="notifBell" style="min-width:300px; max-height:300px; overflow-y:auto;">
+    <li class="fw-semibold px-2 mb-2">Notifications
+      <a href="#" class="float-end text-primary small">Mark all as read</a>
+    </li>
+    {% for note in notifications %}
+      <li class="bg-light rounded-2 p-2 mb-2 small text-wrap">
+        {{ note.text }}<br>
+        <span class="text-muted">{{ note.time.strftime('%d %b %Y, %I:%M %p') }}</span>
+      </li>
+    {% else %}
+      <li class="text-muted small">No notifications in the past 5 days.</li>
+    {% endfor %}
+  </ul>
+</li>
 
 <li class="nav-item dropdown">
   <a class="nav-link dropdown-toggle" href="#" id="userMenuLink"
@@ -54,4 +103,6 @@
     </li>
   </ul>
 </li>
+
+
 

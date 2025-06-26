@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="csrf-token" content="{{ csrf_token() }}" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin - Approve Reports</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #ecf0f1;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h2 {
+      margin-bottom: 20px;
+      color: #2c3e50;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+    }
+    .card img {
+      width: 100%;
+      height: 160px;
+      object-fit: cover;
+    }
+    .card-body {
+      padding: 12px 16px;
+      flex: 1;
+    }
+    .card-body p {
+      margin: 4px 0;
+      font-size: 0.95rem;
+    }
+    .card-footer {
+      padding: 12px 16px;
+      border-top: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .action-btn {
+      border: none;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      color: #fff;
+    }
+    .accept-btn {
+      background: #27ae60;
+    }
+    .accept-btn:hover {
+      background: #1e8449;
+    }
+    .delete-btn {
+      background: #c0392b;
+    }
+    .delete-btn:hover {
+      background: #96281b;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Pending Reports for Approval</h2>
+    <div class="card-grid">
+      {% for item in reports %}
+        <div class="card" data-id="{{ item.id }}">
+          <img
+            src="{% if item.filename %}
+                     {{ url_for('static', filename='uploads/' ~ item.filename) }}
+                   {% else %}
+                     {{ url_for('static', filename='images/placeholder.png') }}
+                   {% endif %}"
+            alt="{{ item.description }}"
+          />
+          <div class="card-body">
+            <p><strong>{{ item.description }}</strong></p>
+            <p>Location: {{ item.location }}</p>
+            <p>Date: {{ item.date_found }}</p>
+            <p>Reported by: {{ item.email }}</p>
+          </div>
+          <div class="card-footer">
+            <button class="action-btn accept-btn"
+              onclick='event.stopPropagation();
+                       if(confirm("Approve this report?")) {
+                         fetch("{{ url_for("accept_report", report_id=item.id) }}", {
+                           method:"POST",
+                           headers:{"X-CSRFToken": document.querySelector("meta[name=csrf-token]").getAttribute("content")}
+                         }).then(()=>location.reload());
+                       }'>
+              ✅ Accept
+            </button>
+            <button class="action-btn delete-btn"
+              onclick='event.stopPropagation();
+                       if(confirm("Delete this report?")) {
+                         fetch("{{ url_for("delete_unapproved_report", report_id=item.id) }}", {
+                           method:"POST",
+                           headers:{"X-CSRFToken": document.querySelector("meta[name=csrf-token]").getAttribute("content")}
+                         }).then(()=>location.reload());
+                       }'>
+              ❌ Delete
+            </button>
+          </div>
+        </div>
+      {% else %}
+        <p>No pending reports found.</p>
+      {% endfor %}
+    </div>
+    <br>
+    <a href="{{ url_for('show_home') }}">&larr; Back to Dashboard</a>
+  </div>
+</body>
+</html>

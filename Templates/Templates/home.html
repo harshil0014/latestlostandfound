@@ -1,0 +1,85 @@
+{% extends 'layouts/base.html' %}
+{% block title %}Dashboard · Lost & Found{% endblock %}
+
+{% block content %}
+<!-- ── HERO + SEARCH ───────────────────────────────────────── -->
+<section class="lf-hero rounded-4 p-5 mb-5 text-white position-relative overflow-hidden">
+
+  <!-- search bar, top-right on md+ screens -->
+  <form action="{{ url_for('found_items') }}" method="get"
+        class="position-absolute top-0 end-0 m-4 d-none d-md-block"
+        style="max-width:320px">
+    <div class="input-group bg-body-tertiary bg-opacity-25 rounded-3">
+      <span class="input-group-text bg-transparent border-0">
+        <i class="fa fa-search text-white-50"></i>
+      </span>
+      <input class="form-control bg-transparent border-0 text-white"
+             name="q"
+             placeholder="Search Found Items…">
+    </div>
+  </form>
+
+  <h1 class="display-5 fw-semibold">Lost and Found Website</h1>
+  <p class="lead mb-5 col-md-7 col-lg-6">
+    Easily report, find and claim lost items through our user-friendly platform.
+  </p>
+
+  <div class="row text-center text-md-start fw-semibold">
+    <div class="col-4 col-md-auto">
+      <div class="fs-2">{{ found_count }}</div>
+      <small class="text-white-50">Items Found</small>
+    </div>
+    <div class="col-4 col-md-auto">
+      <div class="fs-2">{{ claims_total }}</div>
+      <small class="text-white-50">Total Claims</small>
+    </div>
+    <div class="col-4 col-md-auto">
+      <div class="fs-2">{{ claims_resolved }}</div>
+      <small class="text-white-50">Resolved</small>
+    </div>
+  </div>
+</section>
+
+<!-- ── CATEGORY SHORTCUTS ──────────────────────────────────── -->
+<div class="container px-3">
+  <div class="row g-4">
+
+    <!-- Books -->
+    <a href="{{ url_for('category_items',cat='books') }}"
+       class="col-6 col-md-3 text-decoration-none">
+      <article class="lf-card lf-cat-tile lf-cat-books text-white p-4 text-center shadow-sm h-100">
+        <i class="fa-solid fa-book fa-2x mb-3"></i>
+        <h6 class="fw-semibold m-0">Books</h6>
+      </article>
+    </a>
+
+    <!-- Stationary -->
+    <a href="{{ url_for('category_items',cat='stationary') }}"
+       class="col-6 col-md-3 text-decoration-none">
+      <article class="lf-card lf-cat-tile lf-cat-stationary text-white p-4 text-center shadow-sm h-100">
+        <i class="fa-solid fa-pen-ruler fa-2x mb-3"></i>
+        <h6 class="fw-semibold m-0">Stationary</h6>
+      </article>
+    </a>
+
+    <!-- Accessories -->
+    <a href="{{ url_for('category_items',cat='accessories') }}"
+       class="col-6 col-md-3 text-decoration-none">
+      <article class="lf-card lf-cat-tile lf-cat-accessories text-white p-4 text-center shadow-sm h-100">
+        <i class="fa-solid fa-bag-shopping fa-2x mb-3"></i>
+        <h6 class="fw-semibold m-0">Accessories</h6>
+      </article>
+    </a>
+
+    <!-- Others -->
+    <a href="{{ url_for('category_items',cat='others') }}"
+       class="col-6 col-md-3 text-decoration-none">
+      <article class="lf-card lf-cat-tile lf-cat-others text-white p-4 text-center shadow-sm h-100">
+        <i class="fa-solid fa-box-open fa-2x mb-3"></i>
+        <h6 class="fw-semibold m-0">Others</h6>
+      </article>
+    </a>
+
+  </div>
+</div>
+{% endblock %}

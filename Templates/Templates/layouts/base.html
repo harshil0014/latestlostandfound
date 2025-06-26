@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}Lost & Found{% endblock %}</title>
+
+  <!-- 1) Bootstrap -->
+  <link
+  href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+  rel="stylesheet"
+  
+  />
+
+
+  <!-- 2) Your custom styles -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+
+  <!-- 3) Icons -->
+  <link
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    rel="stylesheet"
+  />
+</head>
+
+
+<body class="{% block body_class %}{% endblock %}">
+
+
+  {# ─── TOP NAVBAR ──────────────────────────────────────── #}
+  <header class="navbar navbar-expand-lg navbar-dark bg-dark px-3">
+    <a class="navbar-brand fw-semibold" href="{{ url_for('show_home') }}">Lost & Found</a>
+
+    <button class="navbar-toggler" type="button"
+            data-bs-toggle="collapse" data-bs-target="#lfTopNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <nav id="lfTopNav" class="collapse navbar-collapse">
+      <ul class="navbar-nav ms-auto">
+        {% include 'layouts/partials/nav_links.html' %}
+      </ul>
+    </nav>
+  </header>
+
+  {# ─── MAIN PAGE CONTENT ──────────────────────────────── #}
+  <main class="main-content container-fluid py-4">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+ 
+
+
+</body>
+
+</html>

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Found Items</title>
+  <style>
+    body{font-family:sans-serif;padding:20px;}
+    table{width:100%;border-collapse:collapse;}
+    th,td{padding:8px;border:1px solid #ccc;}
+  </style>
+</head>
+<body>
+  {% for message in get_flashed_messages() %}
+    <div style="padding:8px; margin-bottom:12px; background:#e0f7fa; border:1px solid #4dd0e1;">
+      {{ message }}
+    </div>
+  {% endfor %}
+
+  <h1>Successfully Claimed Items</h1>
+  <table>
+    <tr>
+      <th>Item #</th>
+      <th>Claimed By</th>
+      <th>Date</th>
+      <th>Contest</th>
+      {% if current_user.is_admin %}
+        <th>Ask for Proof</th>
+      {% endif %}
+    </tr>
+    {% if accepted|length == 0 %}
+      <tr>
+        <td colspan="4">No successfully claimed items.</td>
+      </tr>
+    {% endif %}
+
+    {% for c in accepted %}
+      <tr>
+        <td>{{ c.report_id }}</td>
+        <td>{{ c.user_email }}</td>
+        <td>{{ c.timestamp.strftime('%Y-%m-%d') }}</td>
+        <td>
+          {% if current_user.id != c.user_id %}
+            <a href="{{ url_for('complain', report_id=c.report_id) }}"
+              class="btn btn-warning btn-sm">
+              Contest Claim
+            </a>
+          {% else %}
+              —
+          {% endif %}
+        </td>
+         {% if current_user.is_admin %}
+        <td>
+          {% if c.status == 'accepted' %}
+            <!-- still ask for proof if not asked yet -->
+            <form action="{{ url_for('ask_for_proof', claim_id=c.id) }}"
+                  method="POST">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-info btn-sm">
+                Ask for Proof
+              </button>
+            </form>
+          {% elif c.status == 'requires proof' %}
+            <!-- proof is pending -->
+            <span>Pending proof…</span>
+          {% endif %}
+        </td>
+      {% endif %}
+
+      </tr>
+    {% endfor %}
+  </table>
+  <p><a href="{{ url_for('show_home') }}">← Back to Dashboard</a></p>
+</body>
+</html>

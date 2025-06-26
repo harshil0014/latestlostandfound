@@ -4,6 +4,8 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>{% block title %}Lost & Found{% endblock %}</title>
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+
 
   <!-- 1) Bootstrap -->
   <link
@@ -51,6 +53,38 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
  
+  <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const bell = document.getElementById("notifBell");
+        const badge = document.getElementById("notif-badge");
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute("content");
+
+        // Hide badge if already read this session
+        if (sessionStorage.getItem("notifRead") && badge) {
+          badge.style.display = "none";
+        }
+
+        bell.addEventListener("click", function () {
+          fetch("/mark-notifications-read", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": csrfToken
+            }
+          })
+          .then(res => res.json())
+          .then(data => {
+            if (data.ok) {
+              sessionStorage.setItem("notifRead", "true");
+              if (badge) badge.style.display = "none";  // 🧼 visually hide
+            }
+          })
+          .catch(err => console.error("Error clearing notifications:", err));
+        });
+      });
+
+  </script>
+
 
 
 </body>

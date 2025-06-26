@@ -51,8 +51,13 @@ function evaluateClaimStrength(textarea) {
 
 // gate the Submit button by strength score
 function evaluateReportStrength(textarea) {
-  const text = textarea.value.trim().toLowerCase();   // <-- missing line
+  // ① bail if DOM isn’t ready yet
+  const btn = document.getElementById("submit-btn");
+  const meter = document.getElementById("report-strength");
+  if (!btn || !meter) return;
 
+  // ② now safe to read textarea.value…
+  const text = textarea.value.trim().toLowerCase();
   /* ── revised heuristic ── */
   const words        = text.split(/\s+/).filter(Boolean);
   const lengthScore  = Math.min(words.length / 12, 0.4);     // 0-0.4
@@ -72,15 +77,8 @@ function evaluateReportStrength(textarea) {
   else if (score >= 0.5) { msg = "🟡 Add more"; clr = "orange"; }
   else                   { msg = "🔴 Too vague";clr = "red";    }
 
-  const meter = document.getElementById("report-strength");
+  // ③ update the meter
   meter.textContent = msg;
   meter.style.color = clr;
-
-  /* enable submit only for score ≥ 0.8 */
-  document.getElementById("reportSubmitBtn").disabled = !(score >= 0.8);
-
-  // Create a throttled wrapper around evaluateClaimStrength (300ms)
-  
-
-
+  btn.disabled = (score < 0.8);
 }

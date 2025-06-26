@@ -6,6 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Admin - Approve Reports</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -82,35 +84,44 @@
     <div class="card-grid">
       {% for item in reports %}
         <div class="card" data-id="{{ item.id }}">
-          <img
-            src="{% if item.filename %}
-                     {{ url_for('static', filename='uploads/' ~ item.filename) }}
-                   {% else %}
-                     {{ url_for('static', filename='images/placeholder.png') }}
-                   {% endif %}"
-            alt="{{ item.description }}"
-          />
+          {% if item.photos %}
+            <div style="display:flex; gap:4px; overflow-x:auto; padding-bottom:4px;">
+              {% for photo in item.photos %}
+                <img
+                  src="{{ url_for('static', filename='uploads/' ~ photo.filename) }}"
+                  alt="Photo {{ loop.index }}"
+                  style="height:100px; object-fit:cover;"
+                />
+              {% endfor %}
+            </div>
+          {% else %}
+
+            <img
+              src="{{ url_for('static', filename='images/placeholder.png') }}"
+              alt="No photo"
+              style="width:100%; height:160px; object-fit:cover; margin-bottom:4px;"
+            />
+          {% endif %}
+
+
           <div class="card-body">
             <p><strong>{{ item.description }}</strong></p>
             <p>Location: {{ item.location }}</p>
             <p>Date: {{ item.date_found }}</p>
             <p>Reported by: {{ item.email }}</p>
+            <p><strong>Waiting:</strong> {{ item.wait_time }}</p>
+
           </div>
           <div class="card-footer">
             <button class="action-btn accept-btn"
-              onclick='event.stopPropagation();
-                       if(confirm("Approve this report?")) {
-                         fetch("{{ url_for("accept_report", report_id=item.id) }}", {
-                           method:"POST",
-                           headers:{"X-CSRFToken": document.querySelector("meta[name=csrf-token]").getAttribute("content")}
-                         }).then(()=>location.reload());
-                       }'>
+              onclick='event.stopPropagation(); handleApproval({{ item.id }})'>
               ✅ Accept
             </button>
+
             <button class="action-btn delete-btn"
               onclick='event.stopPropagation();
                        if(confirm("Delete this report?")) {
-                         fetch("{{ url_for("delete_unapproved_report", report_id=item.id) }}", {
+                         fetch("{{ url_for('delete_unapproved_report', report_id=item.id) }}", {
                            method:"POST",
                            headers:{"X-CSRFToken": document.querySelector("meta[name=csrf-token]").getAttribute("content")}
                          }).then(()=>location.reload());
@@ -118,6 +129,37 @@
               ❌ Delete
             </button>
           </div>
+          {% if item.match_candidates %}
+            <div style="padding: 12px 16px; background: #fff9e6; border-top: 1px solid #eee;">
+              <strong>🧠 Top Lost Item Matches:</strong>
+              <ul style="margin-top: 8px; padding-left: 18px;">
+                {% for match in item.match_candidates %}
+                  <li class="d-flex justify-content-between align-items-center" style="margin-bottom: 8px;">
+                    <div>
+                      <a href="{{ url_for('lost_items') }}?query={{ match.description|urlencode }}"
+                        target="_blank"
+                        style="text-decoration:none; color:#2980b9; font-weight:bold;">
+                        {{ match.description }}
+                      </a>
+                      — {{ match.location }}
+                      ({{ (match.match_score * 100)|round(1) }}%)
+                    </div>
+
+                    <form method="post"
+                          action="{{ url_for('notify_owner', report_id=item.id, lost_id=match.lost_id) }}"
+                          style="margin:0;">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="action-btn btn btn-sm btn-info">
+                        Notify Owner
+                      </button>
+                    </form>
+                  </li>
+                {% endfor %}
+
+              </ul>
+            </div>
+          {% endif %}
+
         </div>
       {% else %}
         <p>No pending reports found.</p>
@@ -126,5 +168,133 @@
     <br>
     <a href="{{ url_for('show_home') }}">&larr; Back to Dashboard</a>
   </div>
+  <script>
+  function handleApproval(reportId) {
+    if (!confirm("Approve this report?")) return;
+
+    const isContainer = confirm("Is this a container (like a bag)?");
+
+    if (!isContainer) {
+      // Send without modal
+      fetch(`/allow-report/${reportId}/accept`, {
+
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": document.querySelector("meta[name='csrf-token']").getAttribute("content")
+        },
+        body: JSON.stringify({ is_container: false, container_contents: "" })
+      }).then(response => {
+          if (response.ok) {
+            // Remove the card from the page
+            const card = document.querySelector(`.card[data-id="${reportId}"]`);
+            if (card) card.remove();
+
+            // Show a confirmation message
+            const successMsg = document.createElement('div');
+            successMsg.className = 'alert alert-success mt-3';
+            successMsg.innerText = 'Report approved and moved to category.';
+
+            document.querySelector('.container').prepend(successMsg);
+
+            setTimeout(() => {
+              successMsg.remove();
+            }, 3000);
+
+            
+          } else {
+            alert("Approval failed.");
+          }
+        });
+
+    } else {
+      // Save ID and show modal
+      document.getElementById("modalReportId").value = reportId;
+      const modal = new bootstrap.Modal(document.getElementById("containerModal"));
+      modal.show();
+    }
+  }
+
+  // Submit modal form
+  document.addEventListener("DOMContentLoaded", function () {
+    document.getElementById("containerForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      const reportId = document.getElementById("modalReportId").value;
+      const item1 = this.item1.value.trim();
+      const item2 = this.item2.value.trim();
+      const item3 = this.item3.value.trim();
+      const contents = [item1, item2, item3].filter(x => x).join(', ');
+      fetch(`/allow-report/${reportId}/accept`, {
+
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": document.querySelector("meta[name='csrf-token']").getAttribute("content")
+        },
+        body: JSON.stringify({
+          is_container: true,
+          container_contents: contents
+        })
+      })
+      .then(response => {
+        if (response.ok) {
+          const card = document.querySelector(`.card[data-id="${reportId}"]`);
+          if (card) card.remove();
+
+          const successMsg = document.createElement('div');
+          successMsg.className = 'alert alert-success mt-3';
+          successMsg.innerText = 'Container approved and report moved to category.';
+          document.querySelector('.container').prepend(successMsg);
+
+          setTimeout(() => {
+            successMsg.remove();
+          }, 3000); // 3 seconds
+
+
+          const modal = bootstrap.Modal.getInstance(document.getElementById("containerModal"));
+          modal.hide();
+        } else {
+          alert("Approval failed.");
+        }
+      });
+
+      
+    });
+  });
+
+  </script>
+  <div class="modal fade" id="containerModal" tabindex="-1" aria-labelledby="containerModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form id="containerForm">
+          <div class="modal-header">
+            <h5 class="modal-title" id="containerModalLabel">Container Items</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="modalReportId">
+            <div class="mb-3">
+              <label>Item 1</label>
+              <input type="text" class="form-control" name="item1">
+            </div>
+            <div class="mb-3">
+              <label>Item 2</label>
+              <input type="text" class="form-control" name="item2">
+            </div>
+            <div class="mb-3">
+              <label>Item 3</label>
+              <input type="text" class="form-control" name="item3">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="submit" class="btn btn-success">Approve</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <!-- ✅ Add Bootstrap JS so modal works -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
 </body>
 </html>

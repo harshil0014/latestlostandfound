@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="csrf-token" content="{{ csrf_token() }}" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Category: {{ category.title() }}</title>
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #ecf0f1;
+      color: #2c3e50;
+    }
+    .container {
+      display: flex;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    /* Sidebar */
+    .sidebar {
+      width: 200px;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      margin-right: 20px;
+    }
+    .sidebar h3 { margin-top: 0; font-size: 1.2rem; margin-bottom: 12px; }
+    .sidebar ul { list-style: none; padding: 0; margin: 0; }
+    .sidebar li + li { margin-top: 8px; }
+    .sidebar a {
+      text-decoration: none;
+      color: #3498db;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sidebar a:hover { text-decoration: underline; }
+
+    /* Main */
+    .main { flex: 1; }
+    .search-bar { margin-bottom: 16px; }
+    .search-bar input {
+      width: 100%; max-width: 400px;
+      padding: 8px 12px; font-size: 1rem;
+      border: 1px solid #ccc; border-radius: 4px;
+    }
+    form.filter { margin-bottom: 16px; }
+    form.filter label { margin-right: 8px; font-weight: 500; }
+    form.filter input[type="date"] {
+      padding: 6px 8px; border: 1px solid #ccc;
+      border-radius: 4px; margin-right: 8px;
+    }
+    form.filter button {
+      padding: 6px 12px; background: #3498db;
+      border: none; color: #fff; border-radius: 4px;
+      cursor: pointer;
+    }
+    .current-date { margin-bottom: 20px; font-weight: bold; }
+
+    /* Cards */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      display: flex; flex-direction: column;
+    }
+    .card img {
+      width: 100%; height: 160px; object-fit: cover;filter: blur(5px); transition: filter 0.3s ease-in-out;
+    }
+    .card-body { padding: 12px 16px; flex: 1; }
+    .card-body p { margin: 4px 0; font-size: 0.95rem; }
+    .card-footer {
+      padding: 12px 16px; border-top: 1px solid #eee;
+      display: flex; align-items: center;
+      justify-content: space-between;
+    }
+    .blur-text {
+      filter: blur(4px);         
+      user-select: none;           
+      color: #999 !important;      
+    }
+
+    .status-indicator {
+      font-size: 0.9rem; padding: 4px 8px;
+      border-radius: 4px; font-weight: 500;
+    }
+    .status-received   { background: #2ecc71; color: #fff; }
+    .status-claimed    { background: #f1c40f; color: #fff; }
+    .status-unclaimed  { background: #e74c3c; color: #fff; }
+
+    /* Buttons */
+    .action-btn {
+      border: none; border-radius: 4px;
+      padding: 6px 12px; font-size: 0.9rem;
+      cursor: pointer; color: #fff;
+    }
+    .claim-btn { background: #3498db; }
+    .claim-btn:hover { background: #2980b9; }
+    .delete-btn {
+      background: #c0392b; margin-left: 8px;
+    }
+    .delete-btn:hover { background: #96281b; }
+
+    .back-btn {
+      display: inline-block; margin-top: 24px;
+      text-decoration: none; color: #3498db;
+      font-weight: 500;
+    }
+    .back-btn:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <aside class="sidebar">
+      <h3>Item Categories</h3>
+      <nav>
+        <ul>
+          <li><a href="{{ url_for('category_items', cat='books') }}"><i class="fas fa-book"></i> Books</a></li>
+          <li><a href="{{ url_for('category_items', cat='stationary') }}"><i class="fas fa-pencil-alt"></i> Stationary</a></li>
+          <li><a href="{{ url_for('category_items', cat='accessories') }}"><i class="fas fa-key"></i> Accessories</a></li>
+          <li><a href="{{ url_for('category_items', cat='others') }}"><i class="fas fa-th-large"></i> Others</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <section class="main">
+      <div class="search-bar">
+        <input
+          type="text"
+          id="search"
+          placeholder="Search by description or location…"
+          oninput="filterCards()"
+        />
+      </div>
+
+      <form class="filter" method="get"
+            action="{{ url_for('category_items', cat=category) }}">
+        <label for="filter_date">Filter by date:</label>
+        <input
+          type="date"
+          id="filter_date"
+          name="filter_date"
+          min="{{ min_date }}"
+          max="{{ max_date }}"
+          value="{{ filter_date or max_date }}"
+        />
+        <button type="submit">Go</button>
+      </form>
+
+      <div class="current-date">
+        Date:
+        <strong>{{ filter_date or today.strftime('%Y-%m-%d') }}</strong>
+      </div>
+
+      <div class="card-grid">
+        {% for item in items %}
+          <div class="card" data-id="{{ item.id }}">
+            {% if item.filename %}
+              <img src="{{ url_for('static', filename='uploads/' ~ item.filename) }}" alt="{{ item.description }}" />
+            {% else %}
+              <img src="{{ url_for('static', filename='images/placeholder.png') }}" alt="No image available" />
+            {% endif %}
+            <div class="card-body">
+              <p><strong>Description:</strong> {{ item.description }}</p>
+              <p><strong>Location:</strong><span class="blur-text">{{ item.location }}</span></p>
+              <p><strong>Date:</strong> {{ item.date_found }}</p>
+              <p><strong>Contact:</strong> {{ item.contact }}</p>
+            </div>
+            <div class="card-footer">
+              {% if item.received %}
+                {% if item.claimed and item.claimed_by == email %}
+                  <span class="status-indicator status-claimed">Claimed</span>
+                {% else %}
+                  {% if item.id in user_claims %}
+                    <span class="status-indicator status-claimed">Pending…</span>
+                  {% else %}
+                    <button class="action-btn claim-btn"
+                            onclick="event.stopPropagation(); openClaimModal({{ item.id }});">
+                      Claim
+                    </button>
+                    <span class="status-indicator status-unclaimed">Unclaimed</span>
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+
+              {% if 'admin' in roles %}
+                <button class="action-btn delete-btn"
+                        onclick='event.stopPropagation();
+                          if(confirm("Delete this report?")) {
+                            fetch("{{ url_for("delete_report",report_id=item.id) }}", {
+                              method:"POST",
+                              headers:{"X-CSRFToken":
+                                document.querySelector("meta[name=csrf-token]")
+                                        .getAttribute("content")}
+                            }).then(()=>location.reload());
+                          }'>
+                  🗑️ Delete
+                </button>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+
+      </div>
+
+      <a href="{{ url_for('show_home') }}" class="back-btn">&larr; Back to Dashboard</a>
+    </section>
+  </div>
+  <div id="claimModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); justify-content:center; align-items:center;">
+    <div style="background:white; padding:20px; border-radius:8px; width:90%; max-width:500px;">
+      <h3>Claim This Item</h3>
+      <form id="claimForm" method="post">
+          
+
+        <input type="hidden" name="report_id" id="claim_report_id">
+        <div><label>Description:</label>
+          <textarea name="description" rows="2"
+          oninput="throttledEvaluateClaimStrength(this)"></textarea>
+
+
+        <div class="claim-strength"
+            style="font-weight:bold;color:#888;margin:6px 0 10px;">
+          ✏️ Start typing to evaluate your claim…
+        </div>
+
+        </div>
+        <div><label>Location Guess 1:</label>
+          <input name="location1" type="text" required style="width:100%;">
+        </div>
+        <div><label>Location Guess 2:</label>
+          <input name="location2" type="text" required style="width:100%;">
+        </div>
+        <br>
+        <button type="submit">Submit Claim</button>
+        <button type="button" onclick="closeModal()">Cancel</button>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- Fuse.js fuzzy-search -->
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@6"></script>
+  <script>
+    const items = {{ items_for_js|tojson }};
+    const fuse  = new Fuse(items, {
+      keys: ['description','location'],
+      threshold: 0.3
+    });
+    function filterCards() {
+      const q = document.getElementById('search').value;
+      const results = q ? fuse.search(q).map(r=>r.item) : items;
+      document.querySelectorAll('.card').forEach(card=>{
+        card.style.display = results.some(i=>i.id===+card.dataset.id) ? '' : 'none';
+      });
+    }
+  </script>
+  <script>
+  function openClaimModal(reportId) {
+    document.getElementById('claim_report_id').value = reportId;
+    document.getElementById('claimModal').style.display = 'flex';
+  }
+
+  function closeModal() {
+    document.getElementById('claimModal').style.display = 'none';
+  }
+
+  // only bind the submit handler once the DOM is fully loaded:
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('claimForm');
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+      const reportId = formData.get('report_id');
+
+      fetch(`/claim/${reportId}`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': document.querySelector("meta[name=csrf-token]").getAttribute("content")
+        },
+        body: formData
+      })
+      .then(r => r.json())
+      .then(d => {
+        alert(d.message);
+        closeModal();
+        location.reload();
+      })
+      .catch(err => console.error("Claim error:", err));
+    });
+  });
+</script>
+
+<script src="{{ url_for('static', filename='claim_strength.js') }}"></script>
+
+</body>
+</html>

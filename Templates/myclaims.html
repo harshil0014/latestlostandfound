@@ -16,14 +16,42 @@
       word-wrap:break-word;      /* ← force breaks */
     }
     /* Only complaints table gets fixed layout + colgroup */
+    .in-person-alert {
+      background-color: #fff3cd; /* Light yellow background */
+      border: 1px solid #ffc107; /* Yellow border */
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 5px;
+      font-weight: bold;
+      color: #664d03;
+    }
     table.complaints {
       table-layout: fixed;
+    }
+
+    .notification-card {
+      background-color: #e0f7fa; /* Light blue */
+      border: 1px solid #b2ebf2; /* Blue border */
+      padding: 10px;
+      margin-bottom: 15px;
+      border-radius: 5px;
+      font-size: 0.95em;
     }
 
   </style>
 
 </head>
 <body>
+  {% if notifications %}
+    <h2>Recent Notifications</h2>
+    {% for notification in notifications %}
+      <div class="notification-card">
+        <strong>{{ notification.type.title() }} Notification:</strong> {{ notification.text }}
+        <small class="text-muted float-end">{{ notification.time.strftime('%Y-%m-%d %H:%M') }}</small>
+      </div>
+    {% endfor %}
+    <hr> {# Separator #}
+  {% endif %}
   <h1>My Claim Requests</h1>
   <table>
     <thead>
@@ -37,6 +65,15 @@
     </thead>
     <tbody>
     {% for c in my_requests %}
+      {% if c.in_person_required and not c.in_person_verified %}
+        <tr class="in-person-alert-row">
+          <td colspan="5">
+            <div class="in-person-alert">
+              📌 Please complete in-person verification by {{ c.in_person_deadline.strftime('%Y-%m-%d') if c.in_person_deadline else 'N/A' }}. Notes: {{ c.in_person_notes or '–' }}
+            </div>
+          </td>
+        </tr>
+      {% endif %}
       <tr>
         <!-- 1: Item -->
         <td>{{ c.report_id }}</td>

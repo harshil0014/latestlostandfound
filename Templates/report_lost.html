@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Report Lost Item</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 0; padding: 0;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      background: white;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    h2 {
+      margin-top: 0;
+      color: #3498db;
+      text-align: center;
+    }
+
+    label {
+      display: block;
+      margin-top: 14px;
+      font-weight: bold;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 10px;
+      margin-top: 6px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 1rem;
+    }
+
+    button {
+      background: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      font-size: 1rem;
+      margin-top: 20px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #2980b9;
+    }
+
+    .back-link {
+      display: block;
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .back-link a {
+      color: #3498db;
+      text-decoration: none;
+    }
+
+    .back-link a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Report a Lost Item</h2>
+
+    <form method="post">
+      {{ form.hidden_tag() }}
+
+      <label for="description">What did you lose?</label>
+      {{ form.description() }}
+
+      <label for="date_lost">When did you lose it?</label>
+      {{ form.date_lost() }}
+
+      <label for="location1">Possible Location 1</label>
+      {{ form.location1() }}
+
+      <label for="location2">Possible Location 2</label>
+      {{ form.location2() }}
+
+      <label for="location3">Possible Location 3</label>
+      {{ form.location3() }}
+
+      <label for="category">Item Category</label>
+      {{ form.category() }}
+
+      <label for="contact">Your Contact Number</label>
+      {{ form.contact() }}
+
+      {{ form.submit() }}
+    </form>
+
+    <div class="back-link">
+      <a href="{{ url_for('show_home') }}">← Back to Dashboard</a>
+    </div>
+  </div>
+</body>
+</html>

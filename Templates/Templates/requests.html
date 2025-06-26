@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Pending Claim Requests</title>
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+  <style>
+    :root {
+      --primary-blue:#3498db;--accent-red:#e74c3c;
+      --dark-blue:#2c3e50;--light-bg:#ecf0f1;--text-light:#fff;
+    }
+    body{margin:0;font-family:sans-serif;background:var(--light-bg);}
+    .header{display:flex;align-items:center;justify-content:space-between;
+      padding:16px;background:var(--dark-blue);color:var(--text-light);}
+    .header .actions a{margin-left:8px;padding:8px 12px;border-radius:4px;
+      color:#fff;text-decoration:none;}
+    .report-btn{background:var(--accent-red);} .found-items-btn{background:var(--primary-blue);}
+    .claimed-btn{background:#8e44ad;} .logout-btn{background:#2c3e50;}
+    .content{max-width:900px;margin:40px auto;padding:20px;background:#fff;border-radius:8px;}
+    h1{margin-top:0;color:var(--dark-blue);}
+    .group{margin-bottom:24px;}
+    .group h2{color:var(--primary-blue);}
+    ul{list-style:none;padding:0;}
+    li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;}
+    form{display:inline;}
+    .accept-btn{background:#28a745;color:#fff;padding:6px 12px;border:none;border-radius:4px;}
+    .decline-btn{background:var(--accent-red);color:#fff;padding:6px 12px;border:none;border-radius:4px;}
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div>KJSSE Lost &amp; Found</div>
+    <div class="actions">
+      <a href="{{ url_for('report_found') }}" class="report-btn"><i class="fas fa-upload"></i></a>
+      <a href="{{ url_for('found_items') }}" class="found-items-btn"><i class="fas fa-box-open"></i></a>
+      <a href="{{ url_for('view_requests') }}" class="claimed-btn"><i class="fas fa-check-circle"></i></a>
+      <a href="{{ url_for('logout') }}" class="logout-btn"><i class="fas fa-sign-out-alt"></i></a>
+    </div>
+  </header>
+
+  <div class="content">
+    <h1>Pending Claim Requests & Proof Scores</h1>
+
+    {% if not grouped_requests %}
+      <p>No pending requests.</p>
+    {% endif %}
+    {% for rep_id, reqs in grouped_requests.items() %}
+      <div class="group">
+        <h2>Item #{{ rep_id }}</h2>
+        <ul>
+          {% for r in reqs %}
+            <li>
+              <span>
+                {{ r.user_email }} – 
+
+                <!-- Description/Location match % -->
+                <span style="
+                    color:{% if r.match_percentage >= 80 %}green
+                          {% elif r.match_percentage >= 50 %}orange
+                          {% else %}red{% endif %};">
+                  {{ r.match_percentage }}%
+                </span>
+
+                <!-- Proof Score, if available -->
+                {% if r.proof_score is not none %}
+                  &nbsp;|&nbsp;
+                  <span style="
+                      color:{% if r.proof_score >= 0.8 %}green
+                            {% elif r.proof_score >= 0.5 %}orange
+                            {% else %}red{% endif %};">
+                    {{ (r.proof_score * 100) | round(1) }}%
+                  </span>
+                {% endif %}
+              </span>
+
+                
+              </span>
+              <div>
+                <form method="post"
+                      action="{{ url_for('decide_claim', req_id=r.id, decision='accept') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="accept-btn">✔️ Accept</button>
+                </form>
+                <form method="post"
+                      action="{{ url_for('decide_claim', req_id=r.id, decision='decline') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="decline-btn">❌ Decline</button>
+                </form>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endfor %}
+    <p><a href="{{ url_for('show_home') }}">← Back to Dashboard</a></p>
+  </div>
+</body>
+</html>

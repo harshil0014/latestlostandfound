@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="csrf-token" content="{{ csrf_token() }}" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lost Items</title>
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #ecf0f1;
+      color: #2c3e50;
+    }
+    .container {
+      display: flex;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    /* Sidebar */
+    .sidebar {
+      width: 200px;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      margin-right: 20px;
+    }
+    .sidebar h3 { margin-top: 0; font-size: 1.2rem; margin-bottom: 12px; }
+    .sidebar ul { list-style: none; padding: 0; margin: 0; }
+    .sidebar li + li { margin-top: 8px; }
+    .sidebar a {
+      text-decoration: none;
+      color: #3498db;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sidebar a:hover { text-decoration: underline; }
+
+    /* Main */
+    .main { flex: 1; }
+    .search-bar { margin-bottom: 16px; }
+    .search-bar input {
+      width: 100%; max-width: 400px;
+      padding: 8px 12px; font-size: 1rem;
+      border: 1px solid #ccc; border-radius: 4px;
+    }
+    form.filter { margin-bottom: 16px; }
+    form.filter label { margin-right: 8px; font-weight: 500; }
+    form.filter input[type="date"] {
+      padding: 6px 8px; border: 1px solid #ccc;
+      border-radius: 4px; margin-right: 8px;
+    }
+    form.filter button {
+      padding: 6px 12px; background: #3498db;
+      border: none; color: #fff; border-radius: 4px;
+      cursor: pointer;
+    }
+    .current-date { margin-bottom: 20px; font-weight: bold; }
+
+    /* Cards */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      display: flex; flex-direction: column;
+    }
+    .card > img {
+      width: 100%; height: 160px; object-fit: cover;
+    }
+    .card-body { padding: 12px 16px; flex: 1; }
+    .card-body p { margin: 4px 0; font-size: 0.95rem; }
+    .card-footer {
+      padding: 12px 16px; border-top: 1px solid #eee;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .blur-text {
+      filter: blur(4px);
+      user-select: none;
+      color: #999 !important;
+    }
+
+    /* Buttons */
+    .action-btn {
+      border: none; border-radius: 4px;
+      padding: 6px 12px; font-size: 0.9rem;
+      cursor: pointer; color: #fff;
+    }
+    .notify-btn { background: #f39c12; }
+    .notify-btn:hover { background: #d35400; }
+
+    .back-btn {
+      display: inline-block; margin-top: 24px;
+      text-decoration: none; color: #3498db;
+      font-weight: 500;
+    }
+    .back-btn:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <aside class="sidebar">
+      <h3>Item Categories</h3>
+      <nav>
+        <ul>
+          <a href="{{ url_for('lost_category_items', cat='books') }}">
+            <i class="fas fa-book"></i> Books
+          </a>
+          <a href="{{ url_for('lost_category_items', cat='stationary') }}">
+            <i class="fas fa-pencil-alt"></i> Stationary
+          </a>
+          <a href="{{ url_for('lost_category_items', cat='accessories') }}">
+            <i class="fas fa-key"></i> Accessories
+          </a>
+          <a href="{{ url_for('lost_category_items', cat='others') }}">
+            <i class="fas fa-th-large"></i> Others
+          </a>
+
+        </ul>
+      </nav>
+    </aside>
+
+
+    <section class="main">
+      <div class="search-bar">
+        <input
+          type="text"
+          id="searchLost"
+          placeholder="Search lost posts…"
+          oninput="filterLost()"
+        />
+      </div>
+
+      <form class="filter" method="get" action="{{ url_for('lost_items') }}">
+        <label for="filter_date">Filter by date:</label>
+        <input
+          type="date"
+          id="filter_date"
+          name="filter_date"
+          min="{{ min_date }}"
+          max="{{ max_date }}"
+          value="{{ filter_date or max_date }}"
+        />
+        <button type="submit">Go</button>
+      </form>
+
+      <div class="current-date">
+        Showing lost posts from
+        <strong>{{ filter_date or today.strftime('%Y-%m-%d') }}</strong>
+      </div>
+
+      <div class="card-grid" id="lostGrid">
+        {% for post in lost_posts %}
+          <div class="card" data-id="{{ post.id }}">
+            {% if post.has_images %}
+              <img
+                src="{{ url_for('static', filename='uploads/lost/' ~ post.id ~ '/thumb.jpg') }}"
+                alt="Lost photo"
+                class="card-img-top"
+                loading="lazy"
+              />
+            
+            {% endif %}
+
+            <div class="card-body">
+              <p><strong>Description:</strong> {{ post.description }}</p>
+              <p><strong>Location:</strong> {{ post.location }}</p>
+              <p><strong>Date Lost:</strong> {{ post.date_lost }}</p>
+              <p><strong>Contact:</strong> {{ post.contact }}</p>
+            </div>
+            <div class="card-footer">
+              <button
+                class="action-btn notify-btn"
+                onclick="window.location.href='{{ url_for('allow_reports') }}?highlight_lost={{ post.id }}'">
+                🔍 View Matches
+              </button>
+              <button
+                class="action-btn notify-btn"
+                onclick="window.location.href='{{ url_for('view_found_matches', lost_id=post.id) }}'">
+                🔍 View Potential Match
+              </button>
+
+            </div>
+          </div>
+        {% endfor %}
+        {% if not lost_posts %}
+          <p style="margin-top: 20px; color: #7f8c8d; font-style: italic;">
+            No lost items found for this day.
+          </p>
+        {% endif %}
+
+      </div>
+      <p id="noMatchesMsg" style="margin-top: 20px; color: #7f8c8d; font-style: italic; display: none;">
+        No lost items match your search.
+      </p>
+
+
+      <a href="{{ url_for('show_home') }}" class="back-btn">&larr; Back to Dashboard</a>
+    </section>
+  </div>
+
+  <!-- Fuse.js for client‐side filtering -->
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@6"></script>
+  <script>
+  const lostPosts = {{ items_for_js | tojson | safe }};
+  const fuseLost = new Fuse(lostPosts, {
+    keys: ['description', 'location'],
+    threshold: 0.3
+  });
+
+  function filterLost() {
+  const q = document.getElementById('searchLost').value;
+  const results = q ? fuseLost.search(q).map(r => r.item) : lostPosts;
+
+  let anyVisible = false;
+
+  document.querySelectorAll('#lostGrid .card').forEach(card => {
+    const id = +card.dataset.id;
+    const show = results.some(i => i.id === id);
+    card.style.display = show ? '' : 'none';
+    if (show) anyVisible = true;
+  });
+
+  // Show/hide the "No matches" message
+  document.getElementById('noMatchesMsg').style.display = anyVisible ? 'none' : 'block';
+}
+
+  // ⏬ NEW: extract query param from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const queryParam = urlParams.get('query');
+  if (queryParam) {
+    document.getElementById('searchLost').value = queryParam;
+    filterLost();  // trigger initial filter based on param
+}
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Potential Matches</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 0; padding: 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h2 { color: #3498db; }
+    .lost-item, .match-card {
+      border: 1px solid #ddd;
+      padding: 16px;
+      margin-bottom: 20px;
+      border-radius: 6px;
+    }
+    .match-score {
+      font-weight: bold;
+      color: #27ae60;
+    }
+    img {
+      max-width: 100%;
+      max-height: 180px;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Top Matches for Lost Item</h2>
+
+    <div class="lost-item">
+      <p><strong>Description:</strong> {{ lost_item.description }}</p>
+      <p><strong>Location:</strong> {{ lost_item.location }}</p>
+      <p><strong>Date Lost:</strong> {{ lost_item.date_lost }}</p>
+    </div>
+
+    <h3>🔍 Found Item Matches</h3>
+
+    {% if matches %}
+      {% for match in matches %}
+        <div class="match-card">
+          <p><strong>Description:</strong> {{ match.description }}</p>
+          <p><strong>Location:</strong> {{ match.location }}</p>
+          <p class="match-score">Match Score: {{ (match.score * 100) | round(1) }}%</p>
+          {% if match.photo %}
+            <img src="{{ url_for('static', filename='uploads/' ~ match.photo) }}" alt="Match photo">
+          {% endif %}
+        </div>
+      {% endfor %}
+    {% else %}
+      <p>No good matches found from accepted found items.</p>
+    {% endif %}
+
+    <p><a href="{{ url_for('lost_items') }}">&larr; Back to Lost Items</a></p>
+  </div>
+</body>
+</html>

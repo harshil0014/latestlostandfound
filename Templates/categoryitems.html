@@ -77,8 +77,8 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.1);
       display: flex; flex-direction: column;
     }
-    .card img {
-      width: 100%; height: 160px; object-fit: cover;filter: blur(5px); transition: filter 0.3s ease-in-out;
+    .card > img {
+      width: 100%; height: 160px; object-fit: cover; transition: filter 0.3s ease-in-out;
     }
     .card-body { padding: 12px 16px; flex: 1; }
     .card-body p { margin: 4px 0; font-size: 0.95rem; }
@@ -120,6 +120,74 @@
       font-weight: 500;
     }
     .back-btn:hover { text-decoration: underline; }
+    /* Carousel wrapper */
+    .carousel {
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      height: 100px; /* match your image height */
+      margin-bottom: 8px;
+    }
+
+    /* Track that holds all images */
+    .carousel-track {
+      display: flex;
+      transition: transform 0.3s ease-in-out;
+    }
+
+    /* Each slide */
+    .carousel-item {
+      flex: 0 0 100%;    /* one image fills the carousel */
+      max-width: 100%;
+      height: 100px;     /* same as wrapper height */
+      object-fit: cover;
+    }
+
+    /* Prev/Next buttons */
+    .carousel-btn {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255,255,255,0.8);
+      border: none;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 1rem;
+      z-index: 1;
+    }
+    .prev-btn { left: 4px; }
+    .next-btn { right: 4px; }
+    .lightbox {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .lightbox-img {
+      max-width: 90%;
+      max-height: 80%;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    }
+    .lightbox-close,
+    .lightbox-prev,
+    .lightbox-next {
+      position: absolute;
+      background: none;
+      border: none;
+      color: white;
+      font-size: 2rem;
+      cursor: pointer;
+      padding: 0.5rem;
+    }
+    .lightbox-close { top: 1rem; right: 1rem; }
+    .lightbox-prev  { left: 1rem;    top: 50%; transform: translateY(-50%); }
+    .lightbox-next  { right: 1rem;   top: 50%; transform: translateY(-50%); }
+
+
   </style>
 </head>
 <body>
@@ -134,6 +202,14 @@
           <li><a href="{{ url_for('category_items', cat='others') }}"><i class="fas fa-th-large"></i> Others</a></li>
         </ul>
       </nav>
+       {% if current_user.is_authenticated %}
++     <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
++       <h3>Your Stats</h3>
++       <p>Claim Success Rate:
++         <strong>{{ (success_rate * 100)|round(1) }}%</strong>
++       </p>
++     </div>
++     {% endif %}
     </aside>
 
     <section class="main">
@@ -168,16 +244,42 @@
       <div class="card-grid">
         {% for item in items %}
           <div class="card" data-id="{{ item.id }}">
-            {% if item.filename %}
-              <img src="{{ url_for('static', filename='uploads/' ~ item.filename) }}" alt="{{ item.description }}" />
+            {% if item.photos %}
+              <div class="carousel">
+                <button class="carousel-btn prev-btn">&larr;</button>
+                <div class="carousel-track">
+                  {% for photo in item.photos %}
+                    <img
+                      src="{{ url_for('static', filename='uploads/' ~ photo.filename) }}"
+                      alt="Photo {{ loop.index }}"
+                      class="carousel-item"
+                      loading="lazy"
+                    />
+                  {% endfor %}
+                </div>
+                <button class="carousel-btn next-btn">&rarr;</button>
+              </div>
             {% else %}
-              <img src="{{ url_for('static', filename='images/placeholder.png') }}" alt="No image available" />
+              <img
+                src="{{ url_for('static', filename='images/placeholder.png') }}"
+                alt="No photo"
+                style="width:100%; height:160px; object-fit:cover;"
+                loading="lazy"
+              />
             {% endif %}
+
+            
+
+
+            
             <div class="card-body">
               <p><strong>Description:</strong> {{ item.description }}</p>
               <p><strong>Location:</strong><span class="blur-text">{{ item.location }}</span></p>
               <p><strong>Date:</strong> {{ item.date_found }}</p>
-              <p><strong>Contact:</strong> {{ item.contact }}</p>
+              {% if item.is_container %}
+              <p><strong>Contents:</strong> <span class="blur-text">{{ item.container_contents }}</span></p>
+              {% endif %}
+              <p><strong>Contact:</strong> <span class="blur-text">{{ item.contact }}</span></p>
             </div>
             <div class="card-footer">
               {% if item.received %}
@@ -222,8 +324,8 @@
   <div id="claimModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); justify-content:center; align-items:center;">
     <div style="background:white; padding:20px; border-radius:8px; width:90%; max-width:500px;">
       <h3>Claim This Item</h3>
-      <form id="claimForm" method="post">
-          
+
+      <form id="claimForm" method="post" enctype="multipart/form-data">
 
         <input type="hidden" name="report_id" id="claim_report_id">
         <div><label>Description:</label>
@@ -244,8 +346,28 @@
           <input name="location2" type="text" required style="width:100%;">
         </div>
         <br>
+        <label for="proof_file">Upload Proof (image or PDF):</label>
+        <input type="file" id="proof_file" name="proof_file" accept="image/*,application/pdf" required>
+        {% if success_rate < 0.5 %}
+          <div id="video-proof-group" style="margin-top:12px;">
+            <label for="video_file">
+              Upload Short Video<span style="color:red;">*</span>
+            </label>
+            <input
+              type="file"
+              id="video_file"
+              name="video_file"
+              accept="video/*"
+              required
+            >
+          </div>
+        {% endif %}
+
+        
         <button type="submit">Submit Claim</button>
+
         <button type="button" onclick="closeModal()">Cancel</button>
+
       </form>
     </div>
   </div>
@@ -304,6 +426,119 @@
 </script>
 
 <script src="{{ url_for('static', filename='claim_strength.js') }}"></script>
+<script>
+  document.querySelectorAll('.carousel').forEach(carousel => {
+    const track = carousel.querySelector('.carousel-track');
+    const items = carousel.querySelectorAll('.carousel-item');
+    const prev = carousel.querySelector('.prev-btn');
+    const next = carousel.querySelector('.next-btn');
+    let index = 0;
+
+    // hide prev at start
+    prev.style.display = 'none';
+
+    // on next click
+    next.addEventListener('click', () => {
+      if (index < items.length - 1) {
+        index++;
+        track.style.transform = `translateX(-${index * 100}%)`;
+        prev.style.display = '';
+      }
+      if (index === items.length - 1) {
+        next.style.display = 'none';
+      }
+    });
+
+    // on prev click
+    prev.addEventListener('click', () => {
+      if (index > 0) {
+        index--;
+        track.style.transform = `translateX(-${index * 100}%)`;
+        next.style.display = '';
+      }
+      if (index === 0) {
+        prev.style.display = 'none';
+      }
+    });
+  });
+</script>
+
+<!-- Lightbox modal -->
+<div id="lightbox" class="lightbox" style="display:none;">
+  <button class="lightbox-close">&times;</button>
+  <button class="lightbox-prev">&#10094;</button>
+  <img class="lightbox-img" src="" alt="Enlarged view">
+  <button class="lightbox-next">&#10095;</button>
+</div>
+
+<script>
+  (function(){
+    const lightbox = document.getElementById('lightbox');
+    const imgEl    = lightbox.querySelector('.lightbox-img');
+    const btnClose = lightbox.querySelector('.lightbox-close');
+    const btnPrev  = lightbox.querySelector('.lightbox-prev');
+    const btnNext  = lightbox.querySelector('.lightbox-next');
+
+    // Gather all full-size URLs from each carousel
+    // We’ll store per‐card arrays on click
+    let currentList = [], currentIndex = 0;
+
+    document.querySelectorAll('.carousel').forEach(carousel => {
+      const thumbs = Array.from(carousel.querySelectorAll('.carousel-item'))
+        .map(img => img.src.replace('/uploads/','/uploads/')); // same URL but full size
+
+      // When any thumbnail is clicked…
+      carousel.querySelectorAll('.carousel-item').forEach((thumb, idx) => {
+        thumb.style.cursor = 'zoom-in';
+        thumb.addEventListener('click', () => {
+          currentList = thumbs;
+          currentIndex = idx;
+          openLightbox();
+        });
+      });
+    });
+
+    function openLightbox(){
+      imgEl.src = currentList[currentIndex];
+      lightbox.style.display = 'flex';
+      updateButtons();
+    }
+
+    function closeLightbox(){
+      lightbox.style.display = 'none';
+    }
+
+    function updateButtons(){
+      btnPrev.style.display = currentIndex > 0 ? '' : 'none';
+      btnNext.style.display = currentIndex < currentList.length-1 ? '' : 'none';
+    }
+
+    btnClose.addEventListener('click', closeLightbox);
+    // prev/next…
+    btnPrev.addEventListener('click', () => {
+      if(currentIndex>0){
+        currentIndex--;
+        imgEl.src = currentList[currentIndex];
+        updateButtons();
+      }
+    });
+    btnNext.addEventListener('click', () => {
+      if(currentIndex<currentList.length-1){
+        currentIndex++;
+        imgEl.src = currentList[currentIndex];
+        updateButtons();
+      }
+    });
+
+    // Close when clicking outside the image
+    lightbox.addEventListener('click', e => {
+      if(e.target === lightbox) closeLightbox();
+    });
+  })();
+</script>
+
+
+
 
 </body>
 </html>

@@ -1,0 +1,140 @@
+{% extends 'layouts/base.html' %}
+{% block title %}Admin Search{% endblock %}
+{% block body_class %}no-sidebar{% endblock %}
+
+{% block content %}
+{# ──────────────────────────────────────────────────────────────────────────── #}
+{# 1) Hide the top navbar & sidebar whenever <body class="no-sidebar">          #}
+{# ──────────────────────────────────────────────────────────────────────────── #}
+<style>
+  body.no-sidebar header.navbar,
+  body.no-sidebar nav#lfTopNav {
+    display: none !important;
+  }
+  body.no-sidebar main.main-content {
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+  }
+</style>
+
+{# ──────────────────────────────────────────────────────────────────────────── #}
+{# 2) Card wrapper (white, shadowed)                                            #}
+{# ──────────────────────────────────────────────────────────────────────────── #}
+<style>
+  .form-container {
+    max-width: 600px;
+    margin: 40px auto;
+    background: #fff;
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+  }
+</style>
+
+<div class="form-container">
+
+  {# ────────────────────────────────────────────────────────────────────────── #}
+  {# 3) “Run Fraud Check” button styled with its own class so we don’t stomp   #}
+  {#    Bootstrap’s .btn-warning everywhere else.                               #}
+  {# ────────────────────────────────────────────────────────────────────────── #}
+  <a href="{{ url_for('run_fraud_check') }}"
+     class="btn-fraud w-100 mb-4 text-center">
+    <i class="fas fa-shield-alt me-2"></i>
+    Run Fraud Check
+  </a>
+
+  <h2 class="text-center mb-4">Admin Search</h2>
+
+  {# ────────────────────────────────────────────────────────────────────────── #}
+  {# 4) Bootstrap-native form markup                                           #}
+  {# ────────────────────────────────────────────────────────────────────────── #}
+  <form id="search-form"
+        class="needs-validation"
+        enctype="multipart/form-data"
+        novalidate>
+
+    <div class="mb-3">
+      <label for="search-text" class="form-label">
+        Search by description:
+      </label>
+      <input type="text"
+             class="form-control"
+             id="search-text"
+             name="text"
+             placeholder="Enter description"
+             required>
+    </div>
+
+    <div class="mb-4">
+      <label for="search-image" class="form-label">
+        Or upload an image:
+      </label>
+      <input type="file"
+             class="form-control"
+             id="search-image"
+             name="image"
+             required>
+    </div>
+
+    <button type="submit"
+            class="btn btn-primary w-100"
+            disabled>
+      Search
+    </button>
+  </form>
+
+  <div id="search-results" class="mt-4">
+    <!-- results will appear here -->
+  </div>
+</div>
+
+
+{# ──────────────────────────────────────────────────────────────────────────── #}
+{# 5) JavaScript to gate the button and do the fetch                           #}
+{# ──────────────────────────────────────────────────────────────────────────── #}
+<script>
+  const form    = document.getElementById('search-form');
+  const textIn  = document.getElementById('search-text');
+  const fileIn  = document.getElementById('search-image');
+  const button  = form.querySelector('button[type="submit"]');
+  const results = document.getElementById('search-results');
+
+  // Enable only when both fields are filled
+  function toggleBtn() {
+    button.disabled = !(
+      textIn.value.trim().length > 0 &&
+      fileIn.files.length > 0
+    );
+  }
+  textIn.addEventListener('input', toggleBtn);
+  fileIn.addEventListener('change',  toggleBtn);
+
+  // Submit handler
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    results.innerHTML = '<em>Searching…</em>';
+
+    const fd   = new FormData(form);
+    const resp = await fetch('/api/search', { method: 'POST', body: fd });
+    const data = await resp.json();
+
+    if (!data.matches?.length) {
+      results.innerHTML = '<p>No matches found.</p>';
+      return;
+    }
+
+    // Render results
+    results.innerHTML = data.matches.map(m => `
+      <div class="border p-3 mb-3 d-flex align-items-center">
+        <img src="/static/uploads/${m.filename}"
+             width="80"
+             class="me-3">
+        <div>
+          <strong>#${m.id}</strong> (score ${m.score.toFixed(2)})<br>
+          ${m.description}
+        </div>
+      </div>
+    `).join('');
+  });
+</script>
+{% endblock %}

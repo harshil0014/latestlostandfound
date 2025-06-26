@@ -1,0 +1,59 @@
+{#  links used by the top navbar  #}
+<li class="nav-item">
+  <a class="nav-link" href="{{ url_for('show_home') }}"><i class="fas fa-home me-1"></i> Home</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link" href="{{ url_for('report_found') }}"><i class="fas fa-upload me-1"></i> Report&nbsp;Found</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link" href="{{ url_for('found_items') }}"><i class="fas fa-box-open me-1"></i> Found&nbsp;Items</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link" href="{{ url_for('my_claims') }}"><i class="fas fa-clipboard-check me-1"></i> My&nbsp;Claims</a>
+</li>
+
+{% if current_user.is_admin %}
+  <li class="nav-item">
+    <a class="nav-link text-warning" href="{{ url_for('view_requests') }}"><i class="fas fa-user-check me-1"></i> Requests</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link text-warning" href="{{ url_for('allow_reports') }}"><i class="fas fa-clipboard-list me-1"></i> Allow&nbsp;Reports</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link text-warning" href="{{ url_for('admin_search') }}"><i class="fas fa-search me-1"></i> Admin&nbsp;Search</a>
+  </li>
+    <li class="nav-item">
+    <a class="nav-link text-warning" href="{{ url_for('admin_bp.admin_complaints') }}">
+      <i class="fas fa-exclamation-circle me-1"></i> Complaints
+    </a>
+  </li>
+
+{% endif %}
+
+<li class="nav-item dropdown">
+  <a class="nav-link dropdown-toggle" href="#" id="userMenuLink"
+     role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    <i class="fa fa-user-circle me-1"></i> {{ current_user.email }}
+  </a>
+  <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenuLink">
+    <li>
+      <a class="dropdown-item" href="{{ url_for('help') }}">
+        <i class="fas fa-question-circle me-2"></i> Help
+      </a>
+    </li>
+    <li>
+      <a class="dropdown-item" href="{{ url_for('settings') }}">
+        <i class="fas fa-cog me-2"></i> Settings
+      </a>
+    </li>
+    <li><hr class="dropdown-divider"></li>
+    <li>
+      <a class="dropdown-item" href="{{ url_for('logout') }}">
+        <i class="fas fa-sign-out-alt me-2"></i> Logout
+      </a>
+    </li>
+  </ul>
+</li>
+
+
+
